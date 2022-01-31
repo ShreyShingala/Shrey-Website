@@ -42,6 +42,34 @@
       }
   }
 
+@keyframes wave{
+
+    0%, 100%{
+        border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+    }
+
+    60%{
+        border-radius: 30% 70% 30% 70%/ 40% 60% 40% 60%;
+    }
+
+}
+
+@keyframes wave2{
+
+    0%, 100%{
+        border-radius: 40% 60% 70% 30%/ 40% 40% 60% 50%;
+    }
+
+    34%{
+        border-radius: 70% 30% 50% 50%/ 30% 30% 70% 70%;
+    }
+
+    67%{
+        border-radius: 91% 60% 60% 94%/ 98% 83% 60% 60%;
+    }
+
+}
+
 //end of animation
 
 
@@ -201,7 +229,7 @@ body{
     .blobby{
         //maybe change to individual
         background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-        border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+        animation: wave 8s ease-in-out infinite;
 
     }
 
@@ -297,12 +325,12 @@ section.about{
             width: 410px;
             height: 400px;
             z-index: 1;
-            border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+            animation: wave2 9s ease-in-out infinite;
         }
 
         .blobby{
             background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-            border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+            animation: wave2 12s ease-in-out infinite;
         }
 
         .eight{
@@ -322,6 +350,7 @@ section.about{
             width: 250px;
             height: 250px;
             opacity: 30%;
+            animation: wave2 7s ease-in-out infinite;
         }
 
         .ten{
@@ -510,7 +539,7 @@ section.references{
             width: 27vw;
             height: 53vh;
             background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-            border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+            animation: wave2 14s ease-in-out infinite;
     
             &:hover{
                 .info{
