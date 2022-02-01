@@ -70,6 +70,31 @@
 
 }
 
+
+@keyframes slide-in{
+
+    0%{
+        transform: translateX(100%);
+    }
+
+    100%{
+        transform: translateX(0%);
+    }
+
+}
+
+@keyframes slide-out{
+
+    0%{
+        transform: translateX(0%);
+    }
+
+    100%{
+        transform: translateX(100%);
+    }
+
+}
+
 //end of animation
 
 
@@ -104,6 +129,7 @@ body{
         right: 0%;
         top: 0%;
         z-index: 850;
+        animation: slide-in 1.5s 1;
 
         place-content: space-between;
         
@@ -139,6 +165,7 @@ body{
 
             &:hover{
                 font-weight: 300;
+                animation: FadeInAnim 0.5s;
             }
         }
     }
@@ -160,7 +187,6 @@ body{
         width: 1.4em;
         cursor: pointer;
         top: 35%;
-
     }
 
 }
@@ -206,6 +232,7 @@ body{
             &:hover{
                 background-color: var(--col_one);
                 color: var(--col_two);
+                animation: FadeInAnim 0.5s;
                 
             }
             
@@ -325,12 +352,12 @@ section.about{
             width: 410px;
             height: 400px;
             z-index: 1;
-            animation: wave2 9s ease-in-out infinite;
+            animation: wave2 10s ease-in-out infinite;
         }
 
         .blobby{
             background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-            animation: wave2 12s ease-in-out infinite;
+            animation: wave2 8s ease-in-out infinite;
         }
 
         .eight{
@@ -727,6 +754,7 @@ section.contact{
                     background-color: var(--col_one);
                     border-color: var(--col_one);
                     color: var(--col_two);
+                    animation: FadeInAnim 0.5s;
                 }
 
             }
@@ -754,7 +782,7 @@ footer{
     h6{
         font-family: "Roboto Condensed", sans-serif;
         color: var(--col_two);
-        font-size: 1em;
+        font-size: 0.8em;
         text-align: center;
 
         a{
