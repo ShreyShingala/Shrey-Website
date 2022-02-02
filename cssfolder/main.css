@@ -354,6 +354,16 @@ section.about {
   position: relative;
 }
 
+section.about .js-scroll {
+  opacity: 0;
+}
+
+section.about .scrolled {
+  -webkit-animation: FadeInAnim 1s;
+          animation: FadeInAnim 1s;
+  opacity: 1;
+}
+
 section.about .about-container {
   margin-left: 6em;
   margin-right: 6em;
@@ -459,6 +469,16 @@ section.skills h1 {
 
 section.skills .skills-container {
   display: block;
+}
+
+section.skills .skills-container .js-scroll {
+  opacity: 0;
+}
+
+section.skills .skills-container .scrolled {
+  -webkit-animation: FadeInAnim 1s;
+          animation: FadeInAnim 1s;
+  opacity: 1;
 }
 
 section.skills .skills-container .row {
@@ -567,13 +587,21 @@ section.references .references {
   padding: 2em 0 0 0;
 }
 
+section.references .references .js-scroll {
+  opacity: 0;
+}
+
+section.references .references .scrolled {
+  -webkit-animation: FadeInAnim 1s, wave2 14s ease-in-out infinite;
+          animation: FadeInAnim 1s, wave2 14s ease-in-out infinite;
+  opacity: 1;
+}
+
 section.references .references .reference {
   position: relative;
   width: 27vw;
   height: 53vh;
   background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-  -webkit-animation: wave2 14s ease-in-out infinite;
-          animation: wave2 14s ease-in-out infinite;
 }
 
 section.references .references .reference:hover .info {
@@ -710,6 +738,16 @@ section.contact h1 {
   padding-top: 2em;
 }
 
+section.contact .js-scroll {
+  opacity: 0;
+}
+
+section.contact .scrolled {
+  -webkit-animation: FadeInAnim 1s;
+          animation: FadeInAnim 1s;
+  opacity: 1;
+}
+
 section.contact .form-container {
   width: 60vw;
   margin-left: auto;
@@ -777,6 +815,16 @@ footer {
   background: var(--col_three);
   margin-top: -3em;
   height: 350px;
+}
+
+footer .js-scroll {
+  opacity: 0;
+}
+
+footer .scrolled {
+  -webkit-animation: FadeInAnim 2s;
+          animation: FadeInAnim 2s;
+  opacity: 1;
 }
 
 footer h1 {
