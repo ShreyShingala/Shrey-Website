@@ -116,6 +116,8 @@ body{
     position: relative;
     height: 1.2em;
     z-index: 800;
+        
+
 
     .navlinks{
 
@@ -338,6 +340,15 @@ section.about{
     background-color: var(--col_three);
     position: relative;
 
+    .js-scroll{
+        opacity: 0;
+    }
+
+    .scrolled{
+        animation: FadeInAnim 1s;
+        opacity: 1;
+    }
+
     .about-container{
 
         margin-left: 6em;
@@ -427,7 +438,6 @@ section.about{
 //End of about me section
 
 //Skills section
-
 section.skills{
 
     height: 1250px;
@@ -446,6 +456,15 @@ section.skills{
 
     .skills-container{
         display: block;
+        
+        .js-scroll{
+            opacity: 0;
+        }
+    
+        .scrolled{
+            animation: FadeInAnim 1s;
+            opacity: 1;
+        }
 
         .row{
             display: flex;
@@ -560,13 +579,20 @@ section.references{
         position: relative;
         padding: 2em 0 0 0;
 
+        .js-scroll{
+            opacity: 0;
+        }
+    
+        .scrolled{
+            animation: FadeInAnim 1s, wave2 14s ease-in-out infinite;
+            opacity: 1;
+        }
 
         .reference{
             position: relative;
             width: 27vw;
             height: 53vh;
             background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
-            animation: wave2 14s ease-in-out infinite;
     
             &:hover{
                 .info{
@@ -703,6 +729,15 @@ section.contact{
         padding-top: 2em;
     }
 
+    .js-scroll{
+        opacity: 0;
+    }
+
+    .scrolled{
+        animation: FadeInAnim 1s;
+        opacity: 1;
+    }
+
     .form-container{
         width: 60vw;
         margin-left: auto;
@@ -767,6 +802,15 @@ section.contact{
 //footer
 
 footer{
+
+    .js-scroll{
+        opacity: 0;
+    }
+
+    .scrolled{
+        animation: FadeInAnim 2s;
+        opacity: 1;
+    }
 
     background: var(--col_three);
     margin-top: -3em;
