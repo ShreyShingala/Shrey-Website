@@ -217,12 +217,13 @@ body{
             margin: 0.5em 0 0.45em 0;
         }
 
-        button{
+        .btn{
             padding: 1em;
-            width: 130px;
+            width: 160px;
             margin-right: 0.75em;
             cursor: pointer;
             text-align: center;
+            text-decoration: none;
             font-size: 1em;
             font-family: "Spartan";
             font-weight: 700;
@@ -237,7 +238,16 @@ body{
                 animation: FadeInAnim 0.5s;
                 
             }
-            
+        }
+
+        .skills{
+            padding-left: 2.5em;
+            padding-right: 2.5em;
+        }
+
+        .about{
+            padding-left: 1.6em;
+            padding-right: 1.6em;
         }
     }
 
@@ -469,7 +479,7 @@ section.skills{
         .row{
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: top;
             padding-top: 0.75em;
 
             .skill{
@@ -505,8 +515,28 @@ section.skills{
                     padding-top: -0.5em;
                     font-size: 0.9em;
                     font-weight: 350;
+                    max-height: 178px;
+                    overflow: hidden;
+                    
                 }
 
+                .expand{
+                    width: 2em;
+                    cursor: pointer;
+                    margin-bottom: -1em;
+                }
+
+                .shrink{
+                    display: none;
+                    margin-left: auto;
+                    margin-right: auto;
+                    rotate: 180deg;
+                    width: 2em;
+                    cursor: pointer;
+                    margin-bottom: -1em;
+                }
+
+                
             }
 
             .css{
@@ -538,11 +568,39 @@ section.skills{
                 h3{
                     margin-top: 5.3em;
                 }
+                .expand{
+                    margin-top: 20em;
+                }
+                .shrink{
+                    display: none;
+                    rotate: 180deg;
+                    margin-top: 20em;
+                }
+            }
+
+            .enlarge{
+                height: auto;
+                //add anim here
+                h5{
+                    max-height: 10000000px;
+                }
+                .expand{
+                    display: none;
+                }
+                .shrink{
+                    display: flex;
+                }
             }
 
         }
+
     }
 
+}
+
+section.enlarge{
+    height: auto; 
+    padding-bottom: 55px;
 }
 
 //End of skills section

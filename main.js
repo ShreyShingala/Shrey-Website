@@ -6,6 +6,8 @@ const contactLink = document.getElementById("contact");
 
 const navLinks = document.querySelector(".navlinks");
 
+const skills = document.getElementById("skills")
+
 const scrollelem = document.querySelectorAll(".js-scroll");
 const scrollOffset = 100;
 
@@ -30,18 +32,36 @@ const handleScrollAnimation = () => {
     })
 }
 
-
 window.addEventListener('scroll', () => {
     handleScrollAnimation();
-  })
+  });
 
-function closenavbar(){
+function contactclick(){
 
     navLinks.style.display = "none";
     menu.style.display = "block";
     exit.style.display = "none";
+    scrollelem.forEach((el) => {
+        console.log("running")
+        el.classList.add("scrolled");
+
+    })
 
 };
+
+function expand(name){
+
+    const ExpandEl = document.getElementById(name);
+    ExpandEl.classList.add("enlarge");
+    skills.classList.add("enlarge");
+
+};
+
+function shrink(name){
+    const ExpandEl = document.getElementById(name);
+    ExpandEl.classList.remove("enlarge");
+    skills.classList.remove('enlarge')
+}
 
 menu.addEventListener("click", () => {
     navLinks.style.display = "block";
@@ -50,7 +70,7 @@ menu.addEventListener("click", () => {
 });
 
 exit.addEventListener("click", () => {
-    closenavbar();
+    navLinks.style.display = "none";
+    menu.style.display = "block";
+    exit.style.display = "none";
 });
-
-

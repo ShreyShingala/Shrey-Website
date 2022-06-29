@@ -27,7 +27,6 @@
     opacity: 0;
   }
 }
-
 @-webkit-keyframes FadeInAnim {
   0% {
     opacity: 0;
@@ -36,7 +35,6 @@
     opacity: 1;
   }
 }
-
 @keyframes FadeInAnim {
   0% {
     opacity: 0;
@@ -45,93 +43,76 @@
     opacity: 1;
   }
 }
-
 @-webkit-keyframes wave {
   0%, 100% {
-    border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+    border-radius: 70% 30% 30% 70%/60% 40% 60% 40%;
   }
   60% {
-    border-radius: 30% 70% 30% 70%/ 40% 60% 40% 60%;
+    border-radius: 30% 70% 30% 70%/40% 60% 40% 60%;
   }
 }
-
 @keyframes wave {
   0%, 100% {
-    border-radius: 70% 30% 30% 70%/ 60% 40% 60% 40%;
+    border-radius: 70% 30% 30% 70%/60% 40% 60% 40%;
   }
   60% {
-    border-radius: 30% 70% 30% 70%/ 40% 60% 40% 60%;
+    border-radius: 30% 70% 30% 70%/40% 60% 40% 60%;
   }
 }
-
 @-webkit-keyframes wave2 {
   0%, 100% {
-    border-radius: 40% 60% 70% 30%/ 40% 40% 60% 50%;
+    border-radius: 40% 60% 70% 30%/40% 40% 60% 50%;
   }
   34% {
-    border-radius: 70% 30% 50% 50%/ 30% 30% 70% 70%;
+    border-radius: 70% 30% 50% 50%/30% 30% 70% 70%;
   }
   67% {
-    border-radius: 91% 60% 60% 94%/ 98% 83% 60% 60%;
+    border-radius: 91% 60% 60% 94%/98% 83% 60% 60%;
   }
 }
-
 @keyframes wave2 {
   0%, 100% {
-    border-radius: 40% 60% 70% 30%/ 40% 40% 60% 50%;
+    border-radius: 40% 60% 70% 30%/40% 40% 60% 50%;
   }
   34% {
-    border-radius: 70% 30% 50% 50%/ 30% 30% 70% 70%;
+    border-radius: 70% 30% 50% 50%/30% 30% 70% 70%;
   }
   67% {
-    border-radius: 91% 60% 60% 94%/ 98% 83% 60% 60%;
+    border-radius: 91% 60% 60% 94%/98% 83% 60% 60%;
   }
 }
-
 @-webkit-keyframes slide-in {
   0% {
-    -webkit-transform: translateX(100%);
-            transform: translateX(100%);
+    transform: translateX(100%);
   }
   100% {
-    -webkit-transform: translateX(0%);
-            transform: translateX(0%);
+    transform: translateX(0%);
   }
 }
-
 @keyframes slide-in {
   0% {
-    -webkit-transform: translateX(100%);
-            transform: translateX(100%);
+    transform: translateX(100%);
   }
   100% {
-    -webkit-transform: translateX(0%);
-            transform: translateX(0%);
+    transform: translateX(0%);
   }
 }
-
 @-webkit-keyframes slide-out {
   0% {
-    -webkit-transform: translateX(0%);
-            transform: translateX(0%);
+    transform: translateX(0%);
   }
   100% {
-    -webkit-transform: translateX(100%);
-            transform: translateX(100%);
+    transform: translateX(100%);
   }
 }
-
 @keyframes slide-out {
   0% {
-    -webkit-transform: translateX(0%);
-            transform: translateX(0%);
+    transform: translateX(0%);
   }
   100% {
-    -webkit-transform: translateX(100%);
-            transform: translateX(100%);
+    transform: translateX(100%);
   }
 }
-
 body {
   margin: 0;
 }
@@ -143,7 +124,6 @@ body {
   height: 1.2em;
   z-index: 800;
 }
-
 .Nav_container .navlinks {
   display: none;
   font-family: "Roboto Condensed", sans-serif;
@@ -159,32 +139,22 @@ body {
           animation: slide-in 1.5s 1;
   place-content: space-between;
 }
-
 .Nav_container .navlinks .side {
-  display: -webkit-box;
-  display: -ms-flexbox;
   display: flex;
-  -webkit-box-orient: vertical;
-  -webkit-box-direction: normal;
-      -ms-flex-direction: column;
-          flex-direction: column;
+  flex-direction: column;
   text-align: center;
   padding: 0;
 }
-
 .Nav_container .navlinks .left {
   margin-top: 18vh;
 }
-
 .Nav_container .navlinks img {
   width: 1.5em;
   position: absolute;
   left: 50%;
-  -webkit-transform: translateX(-60%);
-          transform: translateX(-60%);
+  transform: translateX(-60%);
   cursor: pointer;
 }
-
 .Nav_container .navlinks a.Text {
   padding-left: 0.75em;
   padding: 1em;
@@ -194,13 +164,11 @@ body {
   font-weight: 900;
   font-size: 1.5em;
 }
-
 .Nav_container .navlinks a.Text:hover {
   font-weight: 300;
   -webkit-animation: FadeInAnim 0.5s;
           animation: FadeInAnim 0.5s;
 }
-
 .Nav_container .exit {
   display: none;
   position: fixed;
@@ -210,7 +178,6 @@ body {
   width: 1.4em;
   cursor: pointer;
 }
-
 .Nav_container .menu {
   display: block;
   position: absolute;
@@ -226,13 +193,11 @@ body {
   overflow: hidden;
   scroll-behavior: smooth;
 }
-
 .hero .main-info {
   position: absolute;
   left: 10%;
   top: 16%;
 }
-
 .hero .main-info h1 {
   font-family: "Spartan";
   color: var(--col_one);
@@ -240,13 +205,13 @@ body {
   width: 55vw;
   margin: 0.5em 0 0.45em 0;
 }
-
-.hero .main-info button {
+.hero .main-info .btn {
   padding: 1em;
-  width: 130px;
+  width: 160px;
   margin-right: 0.75em;
   cursor: pointer;
   text-align: center;
+  text-decoration: none;
   font-size: 1em;
   font-family: "Spartan";
   font-weight: 700;
@@ -255,14 +220,20 @@ body {
   border: 3px solid var(--col_one);
   border-radius: 2em;
 }
-
-.hero .main-info button:hover {
+.hero .main-info .btn:hover {
   background-color: var(--col_one);
   color: var(--col_two);
   -webkit-animation: FadeInAnim 0.5s;
           animation: FadeInAnim 0.5s;
 }
-
+.hero .main-info .skills {
+  padding-left: 2.5em;
+  padding-right: 2.5em;
+}
+.hero .main-info .about {
+  padding-left: 1.6em;
+  padding-right: 1.6em;
+}
 .hero h3 {
   color: var(--col_three);
   text-align: right;
@@ -275,13 +246,11 @@ body {
   text-transform: uppercase;
   font-weight: 400;
 }
-
 .hero .blobby {
   background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
   -webkit-animation: wave 8s ease-in-out infinite;
           animation: wave 8s ease-in-out infinite;
 }
-
 .hero .one {
   position: absolute;
   left: -5%;
@@ -290,7 +259,6 @@ body {
   height: 50%;
   z-index: 2;
 }
-
 .hero .two {
   position: absolute;
   left: -1%;
@@ -300,7 +268,6 @@ body {
   opacity: 25%;
   z-index: 0.9;
 }
-
 .hero .three {
   position: absolute;
   right: 1%;
@@ -309,7 +276,6 @@ body {
   height: 300px;
   opacity: 60%;
 }
-
 .hero .four {
   position: absolute;
   left: 67%;
@@ -318,7 +284,6 @@ body {
   height: 400px;
   opacity: 90%;
 }
-
 .hero .five {
   position: absolute;
   left: 75%;
@@ -327,7 +292,6 @@ body {
   height: 120px;
   opacity: 25%;
 }
-
 .hero .six {
   position: absolute;
   left: 65%;
@@ -336,7 +300,6 @@ body {
   height: 200px;
   opacity: 20%;
 }
-
 .hero .seven {
   position: absolute;
   right: 1.2%;
@@ -344,8 +307,7 @@ body {
   width: 68px;
   height: 70px;
   opacity: 30%;
-  -webkit-transform: rotate(35deg);
-          transform: rotate(35deg);
+  transform: rotate(35deg);
 }
 
 section.about {
@@ -353,28 +315,22 @@ section.about {
   background-color: var(--col_three);
   position: relative;
 }
-
 section.about .js-scroll {
   opacity: 0;
 }
-
 section.about .scrolled {
   -webkit-animation: FadeInAnim 1s;
           animation: FadeInAnim 1s;
   opacity: 1;
 }
-
 section.about .about-container {
   margin-left: 6em;
   margin-right: 6em;
   padding-top: 38vh;
   width: 90;
-  display: -webkit-box;
-  display: -ms-flexbox;
   display: flex;
   position: relative;
 }
-
 section.about .about-container .Shrey {
   padding-left: 4em;
   width: 410px;
@@ -383,13 +339,11 @@ section.about .about-container .Shrey {
   -webkit-animation: wave2 10s ease-in-out infinite;
           animation: wave2 10s ease-in-out infinite;
 }
-
 section.about .about-container .blobby {
   background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
   -webkit-animation: wave2 8s ease-in-out infinite;
           animation: wave2 8s ease-in-out infinite;
 }
-
 section.about .about-container .eight {
   position: absolute;
   left: 20%;
@@ -399,7 +353,6 @@ section.about .about-container .eight {
   opacity: 30%;
   z-index: 0;
 }
-
 section.about .about-container .nine {
   position: absolute;
   left: 2%;
@@ -410,7 +363,6 @@ section.about .about-container .nine {
   -webkit-animation: wave2 7s ease-in-out infinite;
           animation: wave2 7s ease-in-out infinite;
 }
-
 section.about .about-container .ten {
   position: absolute;
   left: 26%;
@@ -420,12 +372,10 @@ section.about .about-container .ten {
   opacity: 65%;
   z-index: 2;
 }
-
 section.about .about-container .text {
   margin-left: 110px;
   padding-top: 2vw;
 }
-
 section.about .about-container .text h1 {
   color: var(--col_four);
   font-family: "Spartan";
@@ -435,14 +385,12 @@ section.about .about-container .text h1 {
   padding: 0 0 0.5em 0;
   font-weight: 750;
 }
-
 section.about .about-container .text .line {
   content: "";
   height: 6px;
   width: 95%;
   background: var(--col_four);
 }
-
 section.about .about-container .text h3 {
   font-family: "Roboto Condensed", sans-serif;
   font-weight: 500;
@@ -456,7 +404,6 @@ section.skills {
   background: var(--col_two);
   margin-top: -2em;
 }
-
 section.skills h1 {
   font-family: "Spartan";
   font-size: 2.3em;
@@ -466,34 +413,23 @@ section.skills h1 {
   padding-top: 2.5em;
   font-weight: 750;
 }
-
 section.skills .skills-container {
   display: block;
 }
-
 section.skills .skills-container .js-scroll {
   opacity: 0;
 }
-
 section.skills .skills-container .scrolled {
   -webkit-animation: FadeInAnim 1s;
           animation: FadeInAnim 1s;
   opacity: 1;
 }
-
 section.skills .skills-container .row {
-  display: -webkit-box;
-  display: -ms-flexbox;
   display: flex;
-  -webkit-box-pack: center;
-      -ms-flex-pack: center;
-          justify-content: center;
-  -webkit-box-align: center;
-      -ms-flex-align: center;
-          align-items: center;
+  justify-content: center;
+  align-items: top;
   padding-top: 0.75em;
 }
-
 section.skills .skills-container .row .skill {
   display: block;
   width: 300px;
@@ -504,16 +440,12 @@ section.skills .skills-container .row .skill {
   padding: 2em;
   margin: 1em;
   text-align: center;
-  -webkit-box-pack: center;
-      -ms-flex-pack: center;
-          justify-content: center;
+  justify-content: center;
   position: relative;
 }
-
 section.skills .skills-container .row .skill img {
   width: 5em;
 }
-
 section.skills .skills-container .row .skill h3 {
   font-family: "Spartan";
   color: var(--col_four);
@@ -523,37 +455,72 @@ section.skills .skills-container .row .skill h3 {
   font-weight: 800;
   padding-top: 0.5em;
 }
-
 section.skills .skills-container .row .skill h5 {
   font-family: "Roboto Condensed", sans-serif;
   padding-top: -0.5em;
   font-size: 0.9em;
   font-weight: 350;
+  max-height: 178px;
+  overflow: hidden;
 }
-
+section.skills .skills-container .row .skill .expand {
+  width: 2em;
+  cursor: pointer;
+  margin-bottom: -1em;
+}
+section.skills .skills-container .row .skill .shrink {
+  display: none;
+  margin-left: auto;
+  margin-right: auto;
+  rotate: 180deg;
+  width: 2em;
+  cursor: pointer;
+  margin-bottom: -1em;
+}
 section.skills .skills-container .row .css img {
   width: 6.75em;
   margin-top: -1.65em;
 }
-
 section.skills .skills-container .row .unity img {
   margin-top: -0.23em;
   padding-bottom: -0.3em;
   padding-right: 0.85em;
   width: 5.2em;
 }
-
 section.skills .skills-container .row .java img {
   height: 9.1em;
   position: absolute;
   top: 4.1%;
   left: 50%;
-  -webkit-transform: translatex(-50%);
-          transform: translatex(-50%);
+  transform: translatex(-50%);
 }
-
 section.skills .skills-container .row .java h3 {
   margin-top: 5.3em;
+}
+section.skills .skills-container .row .java .expand {
+  margin-top: 20em;
+}
+section.skills .skills-container .row .java .shrink {
+  display: none;
+  rotate: 180deg;
+  margin-top: 20em;
+}
+section.skills .skills-container .row .enlarge {
+  height: auto;
+}
+section.skills .skills-container .row .enlarge h5 {
+  max-height: 10000000px;
+}
+section.skills .skills-container .row .enlarge .expand {
+  display: none;
+}
+section.skills .skills-container .row .enlarge .shrink {
+  display: flex;
+}
+
+section.enlarge {
+  height: auto;
+  padding-bottom: 55px;
 }
 
 section.references {
@@ -561,7 +528,6 @@ section.references {
   background: var(--col_three);
   margin-top: -2em;
 }
-
 section.references h1 {
   font-family: "Spartan";
   font-size: 2.3em;
@@ -571,39 +537,31 @@ section.references h1 {
   padding-top: 2em;
   font-weight: 750;
 }
-
 section.references .instruction {
   text-align: center;
   margin: -1em;
   font-weight: 300;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
-
 section.references .references {
-  display: -webkit-box;
-  display: -ms-flexbox;
   display: flex;
   position: relative;
   padding: 2em 0 0 0;
 }
-
 section.references .references .js-scroll {
   opacity: 0;
 }
-
 section.references .references .scrolled {
   -webkit-animation: FadeInAnim 1s, wave2 14s ease-in-out infinite;
           animation: FadeInAnim 1s, wave2 14s ease-in-out infinite;
   opacity: 1;
 }
-
 section.references .references .reference {
   position: relative;
   width: 27vw;
   height: 53vh;
   background: linear-gradient(64deg, var(--col_one) 42%, var(--col_four) 75%);
 }
-
 section.references .references .reference:hover .info {
   -webkit-animation-name: DissolveAnim;
           animation-name: DissolveAnim;
@@ -612,7 +570,6 @@ section.references .references .reference:hover .info {
   -webkit-animation-fill-mode: forwards;
           animation-fill-mode: forwards;
 }
-
 section.references .references .reference:hover .quote {
   display: block;
   -webkit-animation-name: FadeInAnim;
@@ -624,7 +581,6 @@ section.references .references .reference:hover .quote {
   -webkit-animation-fill-mode: forwards;
           animation-fill-mode: forwards;
 }
-
 section.references .references .reference .info {
   display: block;
   -webkit-animation-name: FadeInAnim;
@@ -634,46 +590,38 @@ section.references .references .reference .info {
   -webkit-animation-fill-mode: forwards;
           animation-fill-mode: forwards;
 }
-
 section.references .references .reference .info img {
   width: 8.5vw;
   border-radius: 50%;
   position: absolute;
   left: 52%;
-  -webkit-transform: translateX(-50%);
-          transform: translateX(-50%);
+  transform: translateX(-50%);
   top: 15%;
 }
-
 section.references .references .reference .info .bio {
   display: block;
   left: 52%;
-  -webkit-transform: translateX(-50%);
-          transform: translateX(-50%);
+  transform: translateX(-50%);
   width: 300px;
   top: 52%;
   position: absolute;
 }
-
 section.references .references .reference .info .bio h4 {
   font-size: 12.5px;
   font-family: "Spartan";
   text-align: center;
   font-weight: 450;
 }
-
 section.references .references .reference .info .bio h4 span {
   font-weight: 800;
 }
-
 section.references .references .reference .quote {
   display: none;
   opacity: 0;
   position: relative;
   left: 50%;
   top: 50%;
-  -webkit-transform: translate(-47%, -55%);
-          transform: translate(-47%, -55%);
+  transform: translate(-47%, -55%);
   -webkit-animation-name: DissolveAnim;
           animation-name: DissolveAnim;
   -webkit-animation-duration: 300ms;
@@ -681,7 +629,6 @@ section.references .references .reference .quote {
   -webkit-animation-fill-mode: forwards;
           animation-fill-mode: forwards;
 }
-
 section.references .references .reference .quote h5 {
   font-family: "Roboto Condensed", sans-serif;
   font-size: 1.3em;
@@ -692,29 +639,24 @@ section.references .references .reference .quote h5 {
   margin-left: auto;
   margin-right: auto;
 }
-
 section.references .references .reference .quote h3 {
   font-family: "Spartan";
   text-align: center;
-  margin-top: -.5em;
+  margin-top: -0.5em;
   font-size: 1.3em;
   font-weight: 700;
 }
-
 section.references .references .one {
   position: absolute;
   left: 5%;
   margin-top: 9em;
 }
-
 section.references .references .two {
   position: absolute;
   left: 50%;
   margin-top: 2em;
-  -webkit-transform: translateX(-50%);
-          transform: translateX(-50%);
+  transform: translateX(-50%);
 }
-
 section.references .references .three {
   position: absolute;
   right: 5%;
@@ -727,7 +669,6 @@ section.contact {
   position: relative;
   margin-top: -2em;
 }
-
 section.contact h1 {
   font-family: "Spartan";
   font-size: 2.3em;
@@ -737,49 +678,37 @@ section.contact h1 {
   font-weight: 750;
   padding-top: 2em;
 }
-
 section.contact .js-scroll {
   opacity: 0;
 }
-
 section.contact .scrolled {
   -webkit-animation: FadeInAnim 1s;
           animation: FadeInAnim 1s;
   opacity: 1;
 }
-
 section.contact .form-container {
   width: 60vw;
   margin-left: auto;
   margin-right: auto;
 }
-
 section.contact .form-container .form {
-  display: -webkit-box;
-  display: -ms-flexbox;
   display: flex;
-  -webkit-box-orient: vertical;
-  -webkit-box-direction: normal;
-      -ms-flex-direction: column;
-          flex-direction: column;
+  flex-direction: column;
 }
-
 section.contact .form-container .form label {
   color: var(--col_one);
   padding-bottom: 0.5em;
   font-family: "Spartan";
   font-weight: 500;
 }
-
 section.contact .form-container .form input {
   margin-bottom: 2em;
   padding: 1em;
   font-family: "Roboto Condensed", sans-serif;
   border-radius: 2em;
-  font-size: .9em;
+  font-size: 0.9em;
   outline: none;
 }
-
 section.contact .form-container .form textarea {
   margin-bottom: 2em;
   padding: 1em;
@@ -788,7 +717,6 @@ section.contact .form-container .form textarea {
   font-size: 0.9em;
   outline: none;
 }
-
 section.contact .form-container .form button {
   padding: 1em;
   width: 150px;
@@ -802,7 +730,6 @@ section.contact .form-container .form button {
   margin-right: auto;
   text-transform: capitalize;
 }
-
 section.contact .form-container .form button:hover {
   background-color: var(--col_one);
   border-color: var(--col_one);
@@ -816,17 +743,14 @@ footer {
   margin-top: -3em;
   height: 350px;
 }
-
 footer .js-scroll {
   opacity: 0;
 }
-
 footer .scrolled {
   -webkit-animation: FadeInAnim 2s;
           animation: FadeInAnim 2s;
   opacity: 1;
 }
-
 footer h1 {
   font-family: "Spartan";
   font-weight: 900;
@@ -834,17 +758,14 @@ footer h1 {
   text-align: center;
   color: var(--col_four);
 }
-
 footer h6 {
   font-family: "Roboto Condensed", sans-serif;
   color: var(--col_two);
   font-size: 0.8em;
   text-align: center;
 }
-
 footer h6 a {
   color: var(--col_four);
   cursor: pointer;
   text-decoration: none;
-}
-/*# sourceMappingURL=main.css.map */
+}/*# sourceMappingURL=main.css.map */
