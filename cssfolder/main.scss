@@ -450,7 +450,7 @@ section.about{
 //Skills section
 section.skills{
 
-    height: 1250px;
+    height: auto; //1250px
     background: var(--col_two);
     margin-top: -2em;
 
@@ -548,6 +548,8 @@ section.skills{
             }
 
             .unity{
+                margin-bottom: 7.5em; 
+
                 img{
                     margin-top: -0.23em;
                     padding-bottom: -0.3em;
@@ -557,6 +559,8 @@ section.skills{
             }
 
             .java{
+                margin-bottom: 7.5em; 
+
                 img{
                     height: 9.1em;
                     position: absolute;
@@ -578,11 +582,15 @@ section.skills{
                 }
             }
 
+            .js{
+                margin-bottom: 7.5em; 
+            }
+
             .enlarge{
                 height: auto;
                 //add anim here
                 h5{
-                    max-height: 10000000px;
+                    max-height: max-content;
                 }
                 .expand{
                     display: none;
