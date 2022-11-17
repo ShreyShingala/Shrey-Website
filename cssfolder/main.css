@@ -400,7 +400,7 @@ section.about .about-container .text h3 {
 }
 
 section.skills {
-  height: 1250px;
+  height: auto;
   background: var(--col_two);
   margin-top: -2em;
 }
@@ -481,11 +481,17 @@ section.skills .skills-container .row .css img {
   width: 6.75em;
   margin-top: -1.65em;
 }
+section.skills .skills-container .row .unity {
+  margin-bottom: 7.5em;
+}
 section.skills .skills-container .row .unity img {
   margin-top: -0.23em;
   padding-bottom: -0.3em;
   padding-right: 0.85em;
   width: 5.2em;
+}
+section.skills .skills-container .row .java {
+  margin-bottom: 7.5em;
 }
 section.skills .skills-container .row .java img {
   height: 9.1em;
@@ -505,11 +511,16 @@ section.skills .skills-container .row .java .shrink {
   rotate: 180deg;
   margin-top: 20em;
 }
+section.skills .skills-container .row .js {
+  margin-bottom: 7.5em;
+}
 section.skills .skills-container .row .enlarge {
   height: auto;
 }
 section.skills .skills-container .row .enlarge h5 {
-  max-height: 10000000px;
+  max-height: -webkit-max-content;
+  max-height: -moz-max-content;
+  max-height: max-content;
 }
 section.skills .skills-container .row .enlarge .expand {
   display: none;
