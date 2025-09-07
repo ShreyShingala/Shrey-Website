@@ -1,3 +1,2 @@
 # Shrey-Website
-My website
-This is my website
+A personal portfolio webiste made by yours truly. Made using HTML, CSS, Javascript, and React. 

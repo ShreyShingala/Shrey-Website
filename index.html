@@ -1,4 +1,10 @@
-<!-- Made by Shrey Shingala -->
+<!-- Made by Shrey Shingala 
+ 
+TODO:
+ANIMATION
+RESUME
+
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,252 +13,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shrey's Portfolio</title>
     <link rel="stylesheet" href="cssfolder/main.css">
-    <script src="https://code.jquery.com/jquery-3.6.1.min.js"></script>
-    <link rel="icon" type="image/jpg" href="Images/Shrey.jpg">
+    <link rel="icon" type="image/jpg" href="Images/small_logo.jpg">
    
 </head>
 <body>
-    <!-- NAVBAR -->
-    <div id="nav-placeholder">
+    <div id="navbar-container"></div>
 
-    </div>
-    
-    <script>
-    $(function(){
-      $("#nav-placeholder").load("nav.html");
-    });
-    </script>
-    <!-- END OF NAVBAR -->
-
-    <!-- LANDING PAGE -->
-
-    <section class="hero">
-
-        <div class="main-info">
-
+    <main>
+        <section class="hero">
             <h1>Shrey Shingala</h1>
-            <a href="#about" class="btn about">About Me</a>
-            <a href="#skills" class="btn skills">Skills</a>
-            <a href="#references" class="btn">References</a>
-
-        </div>
-
-        <h3>Super Cool Highschool Student</h3> <!-- little part at bottom left -->
-
-        <div class="blobby one"></div>
-        <div class="blobby two"></div>
-        <div class="blobby three"></div>
-        <div class="blobby four"></div>
-        <div class="blobby five"></div>
-        <div class="blobby six"></div>
-        <div class="blobby seven"></div>
-
-    </section>
-
-    <!-- END OF LANDING PAGE -->
-
-    <!-- ABOUT SECTION -->
-
-    <section id = "about" class="about">
-
-        <div class="about-container js-scroll">
-
-            <img class="Shrey" src="Images/Shrey.jpg" alt="Picture of Shrey">
-            <div class="blobby eight"></div>
-            <div class="blobby nine"></div>
-            <div class="blobby ten"></div>
-
-            <div class="text">
-                <h1>About Me</h1>
-                <div class="line"></div>
-                <h3>Lorem ipsum dolor, sit amet consectetur adipisicing elit. Error nesciunt tenetur odit, similique eius iure. Dicta corrupti eaque provident eveniet quaerat, temporibus eius laboriosam a ipsa quisquam qui sapiente, suscipit, omnis asperiores repellat molestiae dolorum! Vel facilis repellendus obcaecati cum perferendis, molestias voluptatem velit alias perspiciatis eos ea fugit veritatis optio labore ad harum adipisci, excepturi voluptate repellat reiciendis. Saepe accusamus, voluptates, adipisci enim qui maxime quibusdam dolorem rerum fuga cumque iusto quo delectus unde, itaque corrupti dolorum id blanditiis sunt voluptate earum veritatis! Aut, officiis accusamus. Alias totam voluptatum aliquam delectus, facilis itaque doloribus laboriosam enim ut officia non.</h3>
-            
+            <div class="social-links">
+                <a href="https://www.linkedin.com/in/shrey-shingala1/" class="icon_button" aria-label="LinkedIn">
+                    <img src="Images/linkedin.png" alt="LinkedIn">
+                </a>
+                <a href="https://github.com/shreyshingala" class="icon_button" aria-label="GitHub">
+                    <img src="Images/github.png" alt="GitHub" id="github-icon">
+                </a>
+                <a href="mailto:shreyshingala1@gmail.com" class="icon_button" aria-label="Email">
+                    <img src="Images/email.png" alt="Email" id="email-icon">
+                </a>
+                <a href="resume.html" class="resume_button" target="_blank">My Resume</a>
             </div>
-
-
-        </div>
-
-    </section>
-
-    <!-- END OF ABOUT SECTION -->
-
-    <!-- SKILLS SECTION -->
-
-    <section id = "skills" class="skills">
-
-        <h1>Skills</h1>
-
-        <div class="skills-container">
-
-            <div class="skills-container">
-
-                <div class="row one js-scroll">
-
-                    <div id = "python" class="python skill">
-                        <a href="https://www.python.org"><img src="images/python.svg" alt="Python Logo"></a>
-
-                        <h3>Python</h3>
-
-                        <h5>Lorem ipsum dolor sit amet conseorem ipsum dolor sit amet conseorem ipsum dolor sit amet conseorem ipsum dolor sit amet conseorem ipsum dolor sit amet conseorem ipsum dolor sit amet conseorem ipsum dolor sit amet conse laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliqua. Lorem ipsum dolor sit amet consectetur adipisicing elit. Officiis, velit iusto vitae officia harum vero. Quo obcaecati harum a aut molestias ipsam, sunt ratione inventore quidem sapiente, voluptates incidunt vel maxime quibusdam exercitationem ad eius nobis beatae odio. Quaerat repellat unde doloremque laboriosam commodi sint, minima minus veritatis alias nostrum? Lorem ipsum, dolor sit amet consectetur adipisicing elit. Labore eius repellat, commodi quisquam est tenetur ex consequatur asperiores officiis minima! Repellendus nisi voluptas eum at, impedit perferendis obcaecati! Officia assumenda voluptatibus repudiandae officiis ex iure aliquid deserunt beatae, quas est? Saepe pariatur maxime commodi optio reprehenderit corrupti excepturi enim ut. Lorem ipsum dolor sit amet consectetur, adipisicing elit. Voluptates expedita dolorem tenetur incidunt nam sit commodi, quam quia facere assumenda cum odio placeat consequatur minus omnis eaque porro. Suscipit neque quod aspernatur, vel praesentium repellendus fuga reiciendis ipsum asperiores accusantium hic dolores cupiditate maiores omnis magni exercitationem ducimus perferendis consequatur libero nihil fugiat esse delectus! Fugiat odio voluptate perferendis repellendus? Quidem eveniet alias laborum dolorem, aspernatur voluptatem voluptatum modi, earum distinctio fuga voluptates perferendis saepe quibusdam incidunt enim quisquam tempora cumque debitis expedita? Quibusdam ad sint hic, iusto voluptate neque corrupti aspernatur eum minus nostrum dicta, laudantium veritatis fuga maiores!</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('python')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('python')">
-                    </div>
-
-                    <div id = "html" class="html skill">
-                        <a href="https://html.spec.whatwg.org/multipage/"><img src="images/html5.svg" alt="HTML5 Logo"></a>
-
-                        <h3>HTML5</h3>
-
-                        <h5>Lorem ipsum dolor sit amet consectetur adipisicing elit. Soluta minus fugiat unde placeat, debitis eveniet hic ex rem repellendus alias praesentium. Placeat, doloribus laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliquam culpa? Tempore non optio ipsam, sunt eligendi vel saepe illo repellat. Tempore, officia minus. Id excepturi beatae ipsum enim libero repellendus. Atque praesentium quibusdam nam, est architecto porro debitis quo voluptatum repellendus animi quasi magnam error expedita dicta dignissimos laudantium odit tempore.</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('html')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('html')">
-                    </div>
-
-                    <div class="css skill">
-                        <a href="https://www.w3.org/Style/CSS/Overview.en.html"><img src="images/CSS.svg" alt="CSS Logo"></a>
-
-                        <h3>CSS3</h3>
-
-                        <h5>Lorem ipsum dolor sit amet consectetur adipisicing elit. Soluta minus fugiat unde placeat, debitis eveniet hic ex rem repellendus alias praesentium. Placeat, doloribus laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliquam culpa? Tempore non optio ipsam, sunt eligendi vel saepe illo repellat. Tempore, officia minus. Id excepturi beatae ipsum enim libero repellendus. Atque praesentium quibusdam nam, est architecto porro debitis quo voluptatum repellendus animi quasi magnam error expedita dicta dignissimos laudantium odit tempore.</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('css')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('css')">
-                    </div>
-
-                </div>
-
-                <div class="row two js-scroll">
-
-                    <div class="js skill">
-                        <a href="https://www.javascript.com"><img src="images/jslogo.svg" alt="Javascript Logo"></a>
-
-                        <h3>Javascript</h3>
-
-                        <h5>Lorem ipsum dolor sit amet consectetur adipisicing elit. Soluta minus fugiat unde placeat, debitis eveniet hic ex rem repellendus alias praesentium. Placeat, doloribus laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliquam culpa? Tempore non optio ipsam, sunt eligendi vel saepe illo repellat. Tempore, officia minus. Id excepturi beatae ipsum enim libero repellendus. Atque praesentium quibusdam nam, est architecto porro debitis quo voluptatum repellendus animi quasi magnam error expedita dicta dignissimos laudantium odit tempore.</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('js')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('js')">
-                    </div>
-
-                    <div class="unity skill">
-                        <a href="https://unity.com"><img src="images/unity.svg" alt="Unity Logo"></a>
-
-                        <h3>Unity</h3>
-
-                        <h5>Lorem ipsum dolor sit amet consectetur adipisicing elit. Soluta minus fugiat unde placeat, debitis eveniet hic ex rem repellendus alias praesentium. Placeat, doloribus laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliquam culpa? Tempore non optio ipsam, sunt eligendi vel saepe illo repellat. Tempore, officia minus. Id excepturi beatae ipsum enim libero repellendus. Atque praesentium quibusdam nam, est architecto porro debitis quo voluptatum repellendus animi quasi magnam error expedita dicta dignissimos laudantium odit tempore.</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('unity')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('unity')">
-                    </div>
-
-                    <div class="java skill">
-                        <a href="https://www.java.com/en/"><img src="images/java.svg" alt="Java Logo"></a>
-
-                        <h3>Java</h3>
-
-                        <h5>Lorem ipsum dolor sit amet consectetur adipisicing elit. Soluta minus fugiat unde placeat, debitis eveniet hic ex rem repellendus alias praesentium. Placeat, doloribus laboriosam! Quasi at ex laborum molestias repudiandae officiis assumenda aliquam culpa? Tempore non optio ipsam, sunt eligendi vel saepe illo repellat. Tempore, officia minus. Id excepturi beatae ipsum enim libero repellendus. Atque praesentium quibusdam nam, est architecto porro debitis quo voluptatum repellendus animi quasi magnam error expedita dicta dignissimos laudantium odit tempore.</h5>
-                        <img id = "expand" class = "expand" src="Images/down-arrow.svg" alt="expand" onclick="expand('java')">
-                        <img id = "shrink" class = "shrink" src="Images/down-arrow.svg" alt="shrink" onclick="shrink('java')">
-
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- End of skills section-->
-
-    <!-- REFRENCES SECTION -->
-
-    <section id = "references" class="references">
-
-        <h1>References</h1>
-
-        <h4 class="instruction"><em>(Hover over each refrence to view their quote about me)</em></h4>
-
-        <div class="references">
-
-            <div class="reference one js-scroll">
-
-                <div class="info">
-
-                    <img src="Images/Shrey.jpg" alt="Refence person 1">
-
-                    <div class="bio">
-
-                        <h4><span>Name:</span> Shrey Shingala</h4>
-                        <h4><span>Email:</span> email@gmail.com</h4>
-                        <h4><span>Phone Number:</span> 123-456-7890</h4>
-
-                    </div>
-                </div>
-
-                <div class="quote">
-                    <div class="text">
-                        <h5>"Shrey is very good. You should hire him this instant. He is super cool. Yes all of this information is 1000% accurate. Under no circumstance should you not hire him."</h5>
-                        <h3>- Shrey Shingala</h3>
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="reference two js-scroll">
-
-                <div class="info">
-
-                    <img src="Images/Shrey.jpg" alt="Refence person 2">
-
-                    <div class="bio">
-
-                        <h4><span>Name:</span> Krish Patel</h4>
-                        <h4><span>Email:</span> email2@gmail.com</h4>
-                        <h4><span>Phone Number:</span> 098-765-4321</h4>
-
-                    </div>
-                </div>
-
-                <div class="quote">
-                    <div class="text">
-                        <h5>"You should totaly hire Shrey right now. I mean it. You have to hire him. Trust me. You can trust me. Hire him. You must hire him. You have to."</h5>
-                        <h3>- Krish Patel</h3>
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="reference three js-scroll">
-
-                <div class="info">
-
-                    <img src="Images/Shrey.jpg" alt="Refence person 3">
-
-                    <div class="bio">
-
-                        <h4><span>Name:</span> Swara Shingala</h4>
-                        <h4><span>Email:</span> email3@gmail.com</h4>
-                        <h4><span>Phone Number:</span> 111-222-3333</h4>
-
-                    </div>
-                </div>
-
-                <div class="quote">
-                    <div class="text">
-                        <h5>"You should hire Shrey because he is super cool. Yes that's right he is super cool. So hire him right now."</h5>
-                        <h3>- Swara Shingala</h3>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </section>
-
-    <!-- END OF REFRENCES SECTION -->
-
-    <!-- CONTACT SECTION -->
-
-    <section id = "contact" class="contact">
-
-        <h1>Contact Me</h1>
-
-        <div class="form-container js-scroll">
-            <form name = "Contact" action="https://formsubmit.co/24b29b31bef15a4ab536b2769902eaac" method="POST" class="form">
+        </section>
+
+        <section id="About Me">
+            <h2>About Me</h2>
+            <p>Hey, I'm Shrey a Software Engineer at the University of Waterloo! I've always been passionate about programming and am always open to learning new technologies. I have a lot of interests, but I'm particularly interested in finance.</p>
+        </section>
+
+        <section id="projects">
+            <h2>My Projects</h2>
+            <div id="projects-root"></div>
+        </section>
+
+        <section id="contact">
+            <h2>Contact Me</h2>
+            <p>If you'd like to get in touch, feel free to reach out!</p>
+
+            <div class="form-container js-scroll">
+            <form name = "Contact" action="https://formsubmit.co/24b29b31bef15a4ab536b2769902eaac" method="POST" class="form" netlify>
 
                 <label for="name">Name:</label>
                 <input type="text" id = "name" name = "name" required oninvalid="this.setCustomValidity('Please Enter Your Name Here')" oninput="this.setCustomValidity('')">
@@ -266,39 +65,182 @@
                 <label for="message">Message:</label>
                 <textarea id="message" name = "message" cols="30" rows="10" required oninvalid="this.setCustomValidity('Please Enter the Message of Your Email Here')" oninput="this.setCustomValidity('')"></textarea>
 
-                <button type = "submit" class = "submit-btn">send email:</button>
+                <button type = "submit" class = "submit-btn">Send Email</button>
 
             </form>
 
         </div>
 
-    </section>
+        </section>
+    </main>
 
-    <!-- END OF CONTACT SECTION -->
     
-    <!-- Footer -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+        <script src="main.js"></script>
+        <script>
+        // push in navbar
+        fetch('navbar.html')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('navbar-container').innerHTML = data;
 
-    <footer>
+                // Dark mode toggle logic
+                let lightCursorEnabled = false;
+                function setDarkMode(on) {
+                    document.body.classList.toggle('dark-mode', on);
+                    var toggle = document.getElementById('dark-mode-toggle');
+                    var icon = document.getElementById('dark-mode-icon');
+                    if (toggle) toggle.classList.toggle('on', on);
+                    if (icon) icon.textContent = on ? '🌙' : '☀️';
+                    localStorage.setItem('darkMode', on ? '1' : '0');
+                    // swap icons
+                    var githubIcon = document.getElementById('github-icon');
+                    var emailIcon = document.getElementById('email-icon');
+                    if (githubIcon) {
+                        githubIcon.src = on ? 'Images/githubwhite.png' : 'Images/github.png';
+                        githubIcon.style.width = on ? '38px' : '';
+                        githubIcon.style.height = on ? '38px' : '';
+                    }
+                    if (emailIcon) emailIcon.src = on ? 'Images/emailwhite.png' : 'Images/email.png';
 
-        <div class="js-scroll">
-        <h1>Copyright 2022 Shrey Shingala. All Rights Reserved.</h1>
-        <h6>Images and Icons sourced from <a href="https://pixabay.com">Pixabay</a>, <a href="https://www.pexels.com">Pexels</a>, and <a href="https://iconscout.com">Iconscout</a>.</h6>
-        </div>
+                    // Show/hide flashlight button
+                    var lightBtn = document.getElementById('light-cursor-toggle');
+                    if (lightBtn) {
+                        lightBtn.style.display = on ? 'inline-block' : 'none';
+                    }
 
-    </footer>
+                    // Enable/disable light-cursor effect
+                    if (on && lightCursorEnabled) {
+                        enableLightCursor();
+                    } else {
+                        disableLightCursor();
+                    }
+                }
+                const toggle = document.getElementById('dark-mode-toggle');
+                if (toggle) {
+                    toggle.addEventListener('click', function() {
+                        setDarkMode(!document.body.classList.contains('dark-mode'));
+                    });
+                }
 
-    <!-- End of footer section -->
+                // check the local storage
+                let darkPref;
+                if (localStorage.getItem('darkMode') !== null) {
+                    darkPref = localStorage.getItem('darkMode') === '1';
+                } else {
+                    darkPref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                }
 
+                // If flashlight should be off by default, ensure overlay is not shown and button is dimmed
+                setTimeout(() => {
+                    var lightBtn = document.getElementById('light-cursor-toggle');
+                    if (lightBtn) {
+                        lightBtn.style.opacity = '0.4';
+                    }
+                }, 0);
+                setDarkMode(darkPref);
+
+                // Light-cursor toggle button logic
+                setTimeout(() => {
+                    var lightBtn = document.getElementById('light-cursor-toggle');
+                    if (lightBtn) {
+                        // Only show in dark mode on load
+                        lightBtn.style.display = document.body.classList.contains('dark-mode') ? 'inline-block' : 'none';
+                        lightBtn.addEventListener('click', function() {
+                            lightCursorEnabled = !lightCursorEnabled;
+                            if (document.body.classList.contains('dark-mode') && lightCursorEnabled) {
+                                enableLightCursor();
+                            } else {
+                                disableLightCursor();
+                            }
+                            // Optionally, visually indicate state
+                            lightBtn.style.opacity = lightCursorEnabled ? '1' : '0.4';
+                        });
+                    }
+                }, 0);
+            });
+
+            // --- Light Cursor Effect ---
+            let lightCursorOverlay = null;
+            let lastX = window.innerWidth / 2;
+            let lastY = window.innerHeight / 2;
+
+            // Call to enable the spotlight
+            function enableLightCursor() {
+            if (lightCursorOverlay) return;
+
+            lightCursorOverlay = document.createElement('div');
+            lightCursorOverlay.style.position = 'fixed';
+            lightCursorOverlay.style.pointerEvents = 'none';
+            lightCursorOverlay.style.top = '0';
+            lightCursorOverlay.style.left = '0';
+            lightCursorOverlay.style.width = '100vw';
+            lightCursorOverlay.style.height = '100vh';
+            lightCursorOverlay.style.zIndex = '9999';
+            lightCursorOverlay.style.transition = 'background 0.12s linear';
+            lightCursorOverlay.style.willChange = 'background';
+            // Keep normal blend mode to avoid color tinting; the center will be transparent.
+            lightCursorOverlay.style.mixBlendMode = 'normal';
+
+            document.body.appendChild(lightCursorOverlay);
+
+            // Update on pointer movement and window resize
+            document.addEventListener('mousemove', updateLightCursor, { passive: true });
+            window.addEventListener('resize', updateLightCursor, { passive: true });
+            // update immediately so overlay shows right away
+            updateLightCursor();
+            }
+
+            // Call to disable the spotlight
+            function disableLightCursor() {
+                if (!lightCursorOverlay) return;
+                document.removeEventListener('mousemove', updateLightCursor);
+                window.removeEventListener('resize', updateLightCursor);
+                document.body.removeChild(lightCursorOverlay);
+                lightCursorOverlay = null;
+            }
+
+            // Update overlay background to create a transparent center + dark outer area
+            function updateLightCursor(e) {
+                if (!lightCursorOverlay) return;
+
+                if (e && e.type === 'mousemove') {
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                } else {
+                    // keep last known mouse position (useful after resize)
+                    lastX = lastX || window.innerWidth / 2;
+                    lastY = lastY || window.innerHeight / 2;
+                }
+
+                const x = Math.round(lastX);
+                const y = Math.round(lastY);
+
+                // radius of the spotlight circle (px)
+                const radius = 160;         // tweak this to make spotlight larger/smaller
+                const feather = Math.round(radius * 0.45); // soft edge width
+
+                // We want: fully transparent center (so underlying page is visible),
+                // then a quick falloff to a dark overlay outside the circle.
+                // Use a radial-gradient where the center is rgba(0,0,0,0) (transparent)
+                // and outer stops are semi-opaque black to dim the page.
+                // Using pixel values ensures the circle tracks the cursor exactly.
+
+                // A modern and robust radial syntax:
+                // circle <radius>px at <x>px <y>px, <stop1>, <stop2>, ...
+                lightCursorOverlay.style.background = `
+                    radial-gradient(
+                        circle ${radius}px at ${x}px ${y}px,
+                        rgba(0,0,0,0) 0%,
+                        rgba(0,0,0,0) ${Math.max(0, (radius - feather) / radius * 100)}%,
+                        rgba(0,0,0,0.72) ${Math.max(0, (radius + feather * 0.2) / radius * 100)}%,
+                        rgba(0,0,0,0.86) 100%
+                    )
+                `;
+            }
+
+            </script>
 
 </body>
 </html>
-
-<!-- MORE BLOBS -->
-<!-- ADD BUTTON OB ABOUT AND SKILLS THAT LEAD TO MORE ABOUT THEM 
-
-For skills maybe make it expand. Like add a more... that then exapnds it a lot of reveals it a whole lot more maybe use span to do this. 
-
-animate fadout for refrences sectiobn-->
-
-
-<!-- Animate only once for menu, not animating multiple times,  going from a diffrent webpage to contact doesn't show it. -->
