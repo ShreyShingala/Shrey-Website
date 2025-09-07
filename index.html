@@ -2,9 +2,11 @@
  
 TODO:
 ANIMATION
+ADD DIFFERENT STYLES FOR MOBILE AND STUFF
 RESUME
 
 -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -77,97 +79,91 @@ RESUME
     
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-        <script src="main.js"></script>
-        <script>
+    <script src="main.js"></script>
+    <script>
         // push in navbar
-        fetch('navbar.html')
-            .then(response => response.text())
-            .then(data => {
-                document.getElementById('navbar-container').innerHTML = data;
+        fetch('navbar.html').then(response => response.text()).then(data => {
+    
+            document.getElementById('navbar-container').innerHTML = data;
 
-                // Dark mode toggle logic
-                let lightCursorEnabled = false;
-                function setDarkMode(on) {
-                    document.body.classList.toggle('dark-mode', on);
-                    var toggle = document.getElementById('dark-mode-toggle');
-                    var icon = document.getElementById('dark-mode-icon');
-                    if (toggle) toggle.classList.toggle('on', on);
-                    if (icon) icon.textContent = on ? '🌙' : '☀️';
-                    localStorage.setItem('darkMode', on ? '1' : '0');
-                    // swap icons
-                    var githubIcon = document.getElementById('github-icon');
-                    var emailIcon = document.getElementById('email-icon');
-                    if (githubIcon) {
-                        githubIcon.src = on ? 'Images/githubwhite.png' : 'Images/github.png';
-                        githubIcon.style.width = on ? '38px' : '';
-                        githubIcon.style.height = on ? '38px' : '';
-                    }
-                    if (emailIcon) emailIcon.src = on ? 'Images/emailwhite.png' : 'Images/email.png';
-
-                    // Show/hide flashlight button
-                    var lightBtn = document.getElementById('light-cursor-toggle');
-                    if (lightBtn) {
-                        lightBtn.style.display = on ? 'inline-block' : 'none';
-                    }
-
-                    // Enable/disable light-cursor effect
-                    if (on && lightCursorEnabled) {
-                        enableLightCursor();
-                    } else {
-                        disableLightCursor();
-                    }
+            // Dark mode toggle logic
+            let lightCursorEnabled = false;
+            function setDarkMode(on) {
+                document.body.classList.toggle('dark-mode', on);
+                var toggle = document.getElementById('dark-mode-toggle');
+                var icon = document.getElementById('dark-mode-icon');
+                if (toggle) toggle.classList.toggle('on', on);
+                if (icon) icon.textContent = on ? '🌙' : '☀️';
+                localStorage.setItem('darkMode', on ? '1' : '0');
+                // swap icons
+                var githubIcon = document.getElementById('github-icon');
+                var emailIcon = document.getElementById('email-icon');
+                if (githubIcon) {
+                    githubIcon.src = on ? 'Images/githubwhite.png' : 'Images/github.png';
+                    githubIcon.style.width = on ? '38px' : '';
+                    githubIcon.style.height = on ? '38px' : '';
                 }
-                const toggle = document.getElementById('dark-mode-toggle');
-                if (toggle) {
-                    toggle.addEventListener('click', function() {
-                        setDarkMode(!document.body.classList.contains('dark-mode'));
+                if (emailIcon) emailIcon.src = on ? 'Images/emailwhite.png' : 'Images/email.png';
+
+                // Show/hide flashlight button
+                var lightBtn = document.getElementById('light-cursor-toggle');
+                if (lightBtn) {
+                    lightBtn.style.display = on ? 'inline-block' : 'none';
+                }
+
+                // Enable/disable light-cursor effect
+                if (on && lightCursorEnabled) {
+                    enableLightCursor();
+                } else {
+                    disableLightCursor();
+                }
+            }
+            const toggle = document.getElementById('dark-mode-toggle');
+            if (toggle) {
+                toggle.addEventListener('click', function() {
+                    setDarkMode(!document.body.classList.contains('dark-mode'));
+                });
+            }
+
+            let darkPref;
+            if (localStorage.getItem('darkMode') !== null) {
+                darkPref = localStorage.getItem('darkMode') === '1';
+            } else {
+                darkPref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+
+            setTimeout(() => {
+                var lightBtn = document.getElementById('light-cursor-toggle');
+                if (lightBtn) {
+                    lightBtn.style.opacity = '0.4';
+                }
+            }, 0);
+
+            setDarkMode(darkPref);
+
+            setTimeout(() => {
+                var lightBtn = document.getElementById('light-cursor-toggle');
+                if (lightBtn) {
+                    lightBtn.style.display = document.body.classList.contains('dark-mode') ? 'inline-block' : 'none';
+                    lightBtn.addEventListener('click', function() {
+                        lightCursorEnabled = !lightCursorEnabled;
+                        if (document.body.classList.contains('dark-mode') && lightCursorEnabled) {
+                            enableLightCursor();
+                        } else {
+                            disableLightCursor();
+                        }
+                        lightBtn.style.opacity = lightCursorEnabled ? '1' : '0.4';
                     });
                 }
+            }, 0);
+        });
 
-                // check the local storage
-                let darkPref;
-                if (localStorage.getItem('darkMode') !== null) {
-                    darkPref = localStorage.getItem('darkMode') === '1';
-                } else {
-                    darkPref = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-                }
+        // Flashlight cursor thingy
+        let lightCursorOverlay = null;
+        let lastX = window.innerWidth / 2;
+        let lastY = window.innerHeight / 2;
 
-                // If flashlight should be off by default, ensure overlay is not shown and button is dimmed
-                setTimeout(() => {
-                    var lightBtn = document.getElementById('light-cursor-toggle');
-                    if (lightBtn) {
-                        lightBtn.style.opacity = '0.4';
-                    }
-                }, 0);
-                setDarkMode(darkPref);
-
-                // Light-cursor toggle button logic
-                setTimeout(() => {
-                    var lightBtn = document.getElementById('light-cursor-toggle');
-                    if (lightBtn) {
-                        // Only show in dark mode on load
-                        lightBtn.style.display = document.body.classList.contains('dark-mode') ? 'inline-block' : 'none';
-                        lightBtn.addEventListener('click', function() {
-                            lightCursorEnabled = !lightCursorEnabled;
-                            if (document.body.classList.contains('dark-mode') && lightCursorEnabled) {
-                                enableLightCursor();
-                            } else {
-                                disableLightCursor();
-                            }
-                            // Optionally, visually indicate state
-                            lightBtn.style.opacity = lightCursorEnabled ? '1' : '0.4';
-                        });
-                    }
-                }, 0);
-            });
-
-            // --- Light Cursor Effect ---
-            let lightCursorOverlay = null;
-            let lastX = window.innerWidth / 2;
-            let lastY = window.innerHeight / 2;
-
-            // Call to enable the spotlight
-            function enableLightCursor() {
+        function enableLightCursor() {
             if (lightCursorOverlay) return;
 
             lightCursorOverlay = document.createElement('div');
@@ -180,67 +176,66 @@ RESUME
             lightCursorOverlay.style.zIndex = '9999';
             lightCursorOverlay.style.transition = 'background 0.12s linear';
             lightCursorOverlay.style.willChange = 'background';
-            // Keep normal blend mode to avoid color tinting; the center will be transparent.
             lightCursorOverlay.style.mixBlendMode = 'normal';
 
             document.body.appendChild(lightCursorOverlay);
 
-            // Update on pointer movement and window resize
+        
             document.addEventListener('mousemove', updateLightCursor, { passive: true });
             window.addEventListener('resize', updateLightCursor, { passive: true });
-            // update immediately so overlay shows right away
+
             updateLightCursor();
+        }
+
+        // Call to disable the spotlight
+        function disableLightCursor() {
+            if (!lightCursorOverlay) return;
+            document.removeEventListener('mousemove', updateLightCursor);
+            window.removeEventListener('resize', updateLightCursor);
+            document.body.removeChild(lightCursorOverlay);
+            lightCursorOverlay = null;
+        }
+
+        // Update overlay background to create a transparent center + dark outer area
+        function updateLightCursor(e) {
+            if (!lightCursorOverlay) return;
+
+            if (e && e.type === 'mousemove') {
+                lastX = e.clientX;
+                lastY = e.clientY;
+            } else {
+                // keep last known mouse position (useful after resize)
+                lastX = lastX || window.innerWidth / 2;
+                lastY = lastY || window.innerHeight / 2;
             }
 
-            // Call to disable the spotlight
-            function disableLightCursor() {
-                if (!lightCursorOverlay) return;
-                document.removeEventListener('mousemove', updateLightCursor);
-                window.removeEventListener('resize', updateLightCursor);
-                document.body.removeChild(lightCursorOverlay);
-                lightCursorOverlay = null;
-            }
+            const x = Math.round(lastX);
+            const y = Math.round(lastY);
 
-            // Update overlay background to create a transparent center + dark outer area
-            function updateLightCursor(e) {
-                if (!lightCursorOverlay) return;
+            // radius of the spotlight circle (px)
+            const radius = 160;         // tweak this to make spotlight larger/smaller
+            const feather = Math.round(radius * 0.45); // soft edge width
 
-                if (e && e.type === 'mousemove') {
-                    lastX = e.clientX;
-                    lastY = e.clientY;
-                } else {
-                    // keep last known mouse position (useful after resize)
-                    lastX = lastX || window.innerWidth / 2;
-                    lastY = lastY || window.innerHeight / 2;
-                }
+            // We want: fully transparent center (so underlying page is visible),
+            // then a quick falloff to a dark overlay outside the circle.
+            // Use a radial-gradient where the center is rgba(0,0,0,0) (transparent)
+            // and outer stops are semi-opaque black to dim the page.
+            // Using pixel values ensures the circle tracks the cursor exactly.
 
-                const x = Math.round(lastX);
-                const y = Math.round(lastY);
+            // A modern and robust radial syntax:
+            // circle <radius>px at <x>px <y>px, <stop1>, <stop2>, ...
+            lightCursorOverlay.style.background = `
+                radial-gradient(
+                    circle ${radius}px at ${x}px ${y}px,
+                    rgba(0,0,0,0) 0%,
+                    rgba(0,0,0,0) ${Math.max(0, (radius - feather) / radius * 100)}%,
+                    rgba(0,0,0,0.72) ${Math.max(0, (radius + feather * 0.2) / radius * 100)}%,
+                    rgba(0,0,0,0.86) 100%
+                )
+            `;
+        }
 
-                // radius of the spotlight circle (px)
-                const radius = 160;         // tweak this to make spotlight larger/smaller
-                const feather = Math.round(radius * 0.45); // soft edge width
-
-                // We want: fully transparent center (so underlying page is visible),
-                // then a quick falloff to a dark overlay outside the circle.
-                // Use a radial-gradient where the center is rgba(0,0,0,0) (transparent)
-                // and outer stops are semi-opaque black to dim the page.
-                // Using pixel values ensures the circle tracks the cursor exactly.
-
-                // A modern and robust radial syntax:
-                // circle <radius>px at <x>px <y>px, <stop1>, <stop2>, ...
-                lightCursorOverlay.style.background = `
-                    radial-gradient(
-                        circle ${radius}px at ${x}px ${y}px,
-                        rgba(0,0,0,0) 0%,
-                        rgba(0,0,0,0) ${Math.max(0, (radius - feather) / radius * 100)}%,
-                        rgba(0,0,0,0.72) ${Math.max(0, (radius + feather * 0.2) / radius * 100)}%,
-                        rgba(0,0,0,0.86) 100%
-                    )
-                `;
-            }
-
-            </script>
+    </script>
 
 </body>
 </html>

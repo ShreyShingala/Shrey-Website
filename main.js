@@ -1,4 +1,5 @@
 // React to create the main projects section
+
 const projects = [
 	{
 		title: "Pavlovian Human Trainer",
@@ -52,7 +53,7 @@ const projects = [
 
 function ProjectsSection() {
 	return (
-		React.createElement('div', { id: 'projects-root' }, // this is your grid container
+		React.createElement('div', { id: 'projects-root' },
 			projects.map((project, idx) =>
 				React.createElement('div', { className: 'project', key: idx },
 					React.createElement('div', { className: 'project-content' },
@@ -72,7 +73,6 @@ function ProjectsSection() {
 
 
 function LinkToRepo({ href, imgSrc, imgAlt, children}) {
-	// Dynamically choose the GitHub logo based on dark mode
 	const [isDark, setIsDark] = React.useState(document.body.classList.contains('dark-mode'));
 	React.useEffect(() => {
 		function updateDarkMode() {

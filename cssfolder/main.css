@@ -131,7 +131,7 @@ a:hover {
 	border-radius: 6px;
 	transition: background 0.2s;
 }
-/* Light mode hover remains the same */
+
 #navbar-container nav ul li a:hover { background: #ced2d7; }
 
 body.dark-mode #navbar-container nav ul li a:hover {
