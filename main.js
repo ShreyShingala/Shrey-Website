@@ -2,12 +2,36 @@
 
 const projects = [
 	{
+		title: "Pokemon Scanner",
+		img: "Images/pokemon.png",
+		alt: "Pokemon Scanner Screenshot",
+		desc: "Webapp that scans Pokemon cards using a YOLOv8 detector, OCR, and CLIP+FAISS for identification. Live demo and API available.",
+		lang: "TypeScript, Python, YOLOv8, CLIP, FAISS",
+		link: "https://github.com/ShreyShingala/Pokemon-Card-Scanning-Webapp"
+	},
+	{
+		title: "LeReplacer (Chrome Extension)",
+		img: "Images/lereplace.png",
+		alt: "LeReplacer Screenshot",
+		desc: "Chrome extension that detects faces and replaces them with LeBron James images; includes hand-tracking mini-game and a caption generator. Winner of Best Pitch @ Go On Hacks 2025.",
+		lang: "JavaScript, Chrome Extension, Handtrack.js",
+		link: "https://github.com/ShreyShingala?tab=repositories"
+	},
+	{
 		title: "Pavlovian Human Trainer",
 		img: "Images/pavlov.jpeg",
 		alt: "Project 1 Screenshot",
 		desc: "Uses negative reinforcement to train humans to hate brainrot by forcing you to translate brainrot terminology into normal english. Administers punishment to 4 of your senses (hurts your finger, loud noises, burning electronics smell, calls you stupid). Got top 5 at Hackclub's Scrapyard @ Austin, Texas, and winner of Scrappiest subcategory.",
 		lang: "Python, Arduino, OpenCV, Tkinter",
 		link: "https://github.com/ShreyShingala/ScrapyardTrainer"
+	},
+	{
+		title: "Metoxid",
+		img: "Images/metoxid.png",
+		alt: "Metoxid Screenshot",
+		desc: "A terminal-based metadata editor for images, built with C++ using Exiv2 and Ncurses libraries. Made in a group of 3.",
+		lang: "C++, EXIV2, Ncurses",
+		link: "https://github.com/doroshtapgh/metoxid"
 	},
 	{
 		title: "Hydra",
@@ -40,14 +64,6 @@ const projects = [
 		desc: "A simple Sudoku game and solver built using Python and Pygame. Has a user-friendly interface, real-time validation, and an efficient backtracking algorithm to solve puzzles. Used an API to generate boards.",
 		lang: "Python, Pygame",
 		link: "https://github.com/ShreyShingala/Sudoku"
-	},
-	{
-		title: "Metoxid",
-		img: "Images/metoxid.png",
-		alt: "Metoxid Screenshot",
-		desc: "A terminal-based metadata editor for images, built with C++ using Exiv2 and Ncurses libraries. Made in a group of 3.",
-		lang: "C++, EXIV2, Ncurses",
-		link: "https://github.com/doroshtapgh/metoxid"
 	}
 ];
 
