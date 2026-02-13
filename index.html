@@ -6,22 +6,121 @@
     <title>Shrey Shingala</title>
     <link rel="stylesheet" href="cssfolder/main.css">
     <link rel="icon" type="image/jpg" href="Images/small_logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+
+    <!-- Eye of Sauron — dark mode only -->
+    <div class="sauron-eye" aria-hidden="true">
+        <svg viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <radialGradient id="fire-outer" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#c9a84c" stop-opacity="0.6"/>
+                    <stop offset="40%" stop-color="#b44a00" stop-opacity="0.4"/>
+                    <stop offset="100%" stop-color="#3a0a00" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="iris-glow" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="#ff6600" stop-opacity="0.9"/>
+                    <stop offset="50%" stop-color="#cc3300" stop-opacity="0.7"/>
+                    <stop offset="100%" stop-color="#661100" stop-opacity="0.3"/>
+                </radialGradient>
+                <filter id="flame-blur">
+                    <feGaussianBlur stdDeviation="2"/>
+                </filter>
+                <filter id="glow">
+                    <feGaussianBlur stdDeviation="4" result="blur"/>
+                    <feMerge>
+                        <feMergeNode in="blur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <!-- Outer fire glow -->
+            <ellipse cx="100" cy="60" rx="90" ry="50" fill="url(#fire-outer)" filter="url(#flame-blur)"/>
+
+            <!-- Upper eyelid -->
+            <path class="eyelid eyelid-top" d="M10,60 Q100,-10 190,60" fill="#0d0d0d" stroke="#8b2500" stroke-width="1.5"/>
+
+            <!-- Lower eyelid -->
+            <path class="eyelid eyelid-bottom" d="M10,60 Q100,130 190,60" fill="#0d0d0d" stroke="#8b2500" stroke-width="1.5"/>
+
+            <!-- Eye opening (the visible part between lids) -->
+            <clipPath id="eye-opening">
+                <path d="M10,60 Q100,15 190,60 Q100,105 10,60 Z"/>
+            </clipPath>
+
+            <!-- Iris -->
+            <g clip-path="url(#eye-opening)">
+                <ellipse cx="100" cy="60" rx="45" ry="40" fill="url(#iris-glow)" filter="url(#glow)"/>
+                <!-- Slit pupil -->
+                <ellipse class="sauron-pupil" cx="100" cy="60" rx="4" ry="32" fill="#0d0d0d"/>
+                <!-- Inner slit glow -->
+                <ellipse class="sauron-pupil" cx="100" cy="60" rx="2" ry="28" fill="#ff4400" opacity="0.3"/>
+                <!-- Flickering fire highlights -->
+                <ellipse class="fire-flicker-1" cx="80" cy="50" rx="12" ry="8" fill="#ff8800" opacity="0.15"/>
+                <ellipse class="fire-flicker-2" cx="120" cy="65" rx="10" ry="6" fill="#ffaa00" opacity="0.1"/>
+            </g>
+
+            <!-- Eye shape outline -->
+            <path d="M10,60 Q100,15 190,60 Q100,105 10,60 Z" fill="none" stroke="#c9a84c" stroke-width="1" opacity="0.5"/>
+        </svg>
+    </div>
 
     <nav>
         <a href="#" class="nav-name">Shrey Shingala</a>
         <div class="nav-links">
             <a href="#about">About</a>
             <a href="#projects">Projects</a>
-            <a href="#contact">Contact</a>
-            <button id="theme-toggle" aria-label="Toggle theme">Dark</button>
+            <a href="mailto:shreyshingala1@gmail.com">Contact</a>
+            <button id="theme-toggle" aria-label="Toggle theme">
+                <svg class="ring-icon" width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="ring-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#e8c44a"/>
+                            <stop offset="30%" stop-color="#f5d96b"/>
+                            <stop offset="50%" stop-color="#c9a84c"/>
+                            <stop offset="70%" stop-color="#f5d96b"/>
+                            <stop offset="100%" stop-color="#a88a30"/>
+                        </linearGradient>
+                        <linearGradient id="ring-shine" x1="30%" y1="0%" x2="70%" y2="100%">
+                            <stop offset="0%" stop-color="#fff8dc" stop-opacity="0.6"/>
+                            <stop offset="50%" stop-color="#fff8dc" stop-opacity="0"/>
+                            <stop offset="100%" stop-color="#fff8dc" stop-opacity="0.3"/>
+                        </linearGradient>
+                        <filter id="ring-glow-filter">
+                            <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <!-- Ring shadow -->
+                    <ellipse cx="52" cy="54" rx="32" ry="10" fill="#000" opacity="0.08"/>
+                    <!-- Ring body — tilted band -->
+                    <ellipse cx="50" cy="50" rx="34" ry="12" fill="url(#ring-gold)" stroke="#a88a30" stroke-width="1" filter="url(#ring-glow-filter)"/>
+                    <!-- Inner hole -->
+                    <ellipse cx="50" cy="50" rx="22" ry="7" fill="#f5f0e8" class="ring-hole"/>
+                    <!-- Shine highlight -->
+                    <ellipse cx="50" cy="50" rx="34" ry="12" fill="url(#ring-shine)"/>
+                    <!-- Inscription marks (tiny lines on the band) -->
+                    <line x1="26" y1="47" x2="30" y2="45" stroke="#a88a30" stroke-width="0.5" opacity="0.4"/>
+                    <line x1="34" y1="42" x2="38" y2="41" stroke="#a88a30" stroke-width="0.5" opacity="0.3"/>
+                    <line x1="44" y1="40" x2="48" y2="39.5" stroke="#a88a30" stroke-width="0.5" opacity="0.35"/>
+                    <line x1="54" y1="39.5" x2="58" y2="40" stroke="#a88a30" stroke-width="0.5" opacity="0.3"/>
+                    <line x1="64" y1="41" x2="68" y2="43" stroke="#a88a30" stroke-width="0.5" opacity="0.4"/>
+                    <line x1="72" y1="45" x2="75" y2="47" stroke="#a88a30" stroke-width="0.5" opacity="0.35"/>
+                </svg>
+            </button>
         </div>
     </nav>
 
     <main>
         <section class="hero">
-            <h1>Shrey Shingala</h1>
+            <h1 class="hero-name">Shrey Shingala</h1>
             <p class="subtitle">Software Engineering @ University of Waterloo</p>
             <div class="links">
                 <a href="https://github.com/shreyshingala" target="_blank" rel="noopener">GitHub</a>
@@ -29,11 +128,30 @@
                 <a href="mailto:shreyshingala1@gmail.com">Email</a>
                 <a href="resume.html" target="_blank">Resume</a>
             </div>
+
+            <!-- Tengwar-inspired divider -->
+            <svg class="divider" viewBox="0 0 400 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M0,20 Q50,8 100,20 T200,20 T300,20 T400,20" stroke="currentColor" fill="none" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="160" cy="20" r="2" fill="currentColor" opacity="0.25"/>
+                <circle cx="200" cy="20" r="3" fill="currentColor" opacity="0.3"/>
+                <circle cx="240" cy="20" r="2" fill="currentColor" opacity="0.25"/>
+                <path d="M170,20 Q185,12 200,20 Q215,28 230,20" stroke="currentColor" fill="none" stroke-width="0.8" opacity="0.25"/>
+                <path d="M180,20 Q190,15 200,20 Q210,25 220,20" stroke="currentColor" fill="none" stroke-width="0.5" opacity="0.2"/>
+            </svg>
         </section>
 
         <section id="about">
             <h2>About</h2>
             <p>I'm a Software Engineering student at the University of Waterloo. I'm passionate about building things that work well, learning new technologies, and exploring the intersection of software and finance.</p>
+
+            <svg class="divider" viewBox="0 0 400 40" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M0,20 Q50,8 100,20 T200,20 T300,20 T400,20" stroke="currentColor" fill="none" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="160" cy="20" r="2" fill="currentColor" opacity="0.25"/>
+                <circle cx="200" cy="20" r="3" fill="currentColor" opacity="0.3"/>
+                <circle cx="240" cy="20" r="2" fill="currentColor" opacity="0.25"/>
+                <path d="M170,20 Q185,12 200,20 Q215,28 230,20" stroke="currentColor" fill="none" stroke-width="0.8" opacity="0.25"/>
+                <path d="M180,20 Q190,15 200,20 Q210,25 220,20" stroke="currentColor" fill="none" stroke-width="0.5" opacity="0.2"/>
+            </svg>
         </section>
 
         <section id="projects">
@@ -44,7 +162,13 @@
                     <div class="project-info">
                         <h3>Pokemon Scanner</h3>
                         <p>Webapp that scans Pokemon cards using YOLOv8, OCR, and CLIP+FAISS for identification. Live demo and API available.</p>
-                        <span class="tech">TypeScript, Python, YOLOv8, CLIP, FAISS</span>
+                        <div class="tech-tags">
+                            <span class="tech">TypeScript</span>
+                            <span class="tech">Python</span>
+                            <span class="tech">YOLOv8</span>
+                            <span class="tech">CLIP</span>
+                            <span class="tech">FAISS</span>
+                        </div>
                     </div>
                 </a>
 
@@ -52,7 +176,11 @@
                     <div class="project-info">
                         <h3>LeReplacer</h3>
                         <p>Chrome extension that detects faces and replaces them with LeBron James images. Includes hand-tracking mini-game and caption generator. Won Best Pitch @ Go On Hacks 2025.</p>
-                        <span class="tech">JavaScript, Chrome Extension, Handtrack.js</span>
+                        <div class="tech-tags">
+                            <span class="tech">JavaScript</span>
+                            <span class="tech">Chrome Extension</span>
+                            <span class="tech">Handtrack.js</span>
+                        </div>
                     </div>
                 </a>
 
@@ -60,7 +188,12 @@
                     <div class="project-info">
                         <h3>Pavlovian Human Trainer</h3>
                         <p>Uses negative reinforcement to train humans to hate brainrot by forcing translation of brainrot terminology into normal English. Administers multi-sensory punishment. Top 5 at Hackclub Scrapyard, Austin.</p>
-                        <span class="tech">Python, Arduino, OpenCV, Tkinter</span>
+                        <div class="tech-tags">
+                            <span class="tech">Python</span>
+                            <span class="tech">Arduino</span>
+                            <span class="tech">OpenCV</span>
+                            <span class="tech">Tkinter</span>
+                        </div>
                     </div>
                 </a>
 
@@ -68,7 +201,11 @@
                     <div class="project-info">
                         <h3>Metoxid</h3>
                         <p>Terminal-based metadata editor for images, built with C++ using Exiv2 and Ncurses libraries.</p>
-                        <span class="tech">C++, EXIV2, Ncurses</span>
+                        <div class="tech-tags">
+                            <span class="tech">C++</span>
+                            <span class="tech">EXIV2</span>
+                            <span class="tech">Ncurses</span>
+                        </div>
                     </div>
                 </a>
 
@@ -76,7 +213,10 @@
                     <div class="project-info">
                         <h3>Hydra</h3>
                         <p>April Fools "virus" that spawns popups when you close them. Survives Task Manager.</p>
-                        <span class="tech">Python, Tkinter</span>
+                        <div class="tech-tags">
+                            <span class="tech">Python</span>
+                            <span class="tech">Tkinter</span>
+                        </div>
                     </div>
                 </a>
 
@@ -84,7 +224,11 @@
                     <div class="project-info">
                         <h3>Command Line Browser</h3>
                         <p>Terminal-based web browser that fetches and displays web pages. Features an AI-powered productivity mode.</p>
-                        <span class="tech">Python, Selenium, BeautifulSoup</span>
+                        <div class="tech-tags">
+                            <span class="tech">Python</span>
+                            <span class="tech">Selenium</span>
+                            <span class="tech">BeautifulSoup</span>
+                        </div>
                     </div>
                 </a>
 
@@ -92,45 +236,124 @@
                     <div class="project-info">
                         <h3>Sudoku Game & Solver</h3>
                         <p>Sudoku game with real-time validation and a backtracking solver. Uses an API to generate boards.</p>
-                        <span class="tech">Python, Pygame</span>
+                        <div class="tech-tags">
+                            <span class="tech">Python</span>
+                            <span class="tech">Pygame</span>
+                        </div>
                     </div>
                 </a>
 
             </div>
         </section>
 
-        <section id="contact">
-            <h2>Contact</h2>
-            <p>Feel free to reach out.</p>
-            <form action="https://formsubmit.co/24b29b31bef15a4ab536b2769902eaac" method="POST">
-                <input type="text" name="name" placeholder="Name" required>
-                <input type="email" name="email" placeholder="Email" required>
-                <input type="text" name="subject" placeholder="Subject" required>
-                <textarea name="message" rows="5" placeholder="Message" required></textarea>
-                <button type="submit">Send</button>
-            </form>
-        </section>
     </main>
 
     <footer>
-        <p>Shrey Shingala</p>
+        <p class="footer-quote">Let's take this road together.</p>
+        <p>
+            <a href="mailto:shreyshingala1@gmail.com">shreyshingala1@gmail.com</a>
+        </p>
     </footer>
 
     <script>
+        // ---- Theme toggle — The One Ring ----
         const toggle = document.getElementById('theme-toggle');
+        const ringHole = toggle.querySelector('.ring-hole');
+        const sauronEye = document.querySelector('.sauron-eye');
         const prefersDark = localStorage.getItem('theme') === 'dark' ||
             (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
+        function updateRingHole(isDark) {
+            if (ringHole) {
+                ringHole.setAttribute('fill', isDark ? '#0d0d0d' : '#f5f0e8');
+            }
+        }
+
         if (prefersDark) {
             document.body.classList.add('dark');
-            toggle.textContent = 'Light';
+            updateRingHole(true);
         }
 
         toggle.addEventListener('click', () => {
+            const ring = toggle.querySelector('.ring-icon');
+            ring.style.transition = 'transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+            ring.style.transform = 'rotate(360deg)';
+            setTimeout(() => {
+                ring.style.transition = 'none';
+                ring.style.transform = 'rotate(0deg)';
+            }, 520);
+
             document.body.classList.toggle('dark');
             const isDark = document.body.classList.contains('dark');
-            toggle.textContent = isDark ? 'Light' : 'Dark';
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            updateRingHole(isDark);
+        });
+
+        // ---- Eye of Sauron — cursor tracking ----
+        const pupil = document.querySelectorAll('.sauron-pupil');
+
+        document.addEventListener('mousemove', (e) => {
+            if (!document.body.classList.contains('dark')) return;
+
+            const eyeRect = sauronEye.getBoundingClientRect();
+            const eyeCenterX = eyeRect.left + eyeRect.width / 2;
+            const eyeCenterY = eyeRect.top + eyeRect.height / 2;
+
+            const dx = e.clientX - eyeCenterX;
+            const dy = e.clientY - eyeCenterY;
+
+            // Normalize movement — max 8px offset
+            const maxOffset = 8;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const clampedDist = Math.min(dist, 300);
+            const ratio = clampedDist / 300;
+
+            const offsetX = (dx / (dist || 1)) * maxOffset * ratio;
+            const offsetY = (dy / (dist || 1)) * maxOffset * ratio * 0.5;
+
+            pupil.forEach(p => {
+                p.setAttribute('cx', 100 + offsetX);
+                p.setAttribute('cy', 60 + offsetY);
+            });
+        });
+
+        // ---- Eye blink ----
+        const eyelidTop = document.querySelector('.eyelid-top');
+        const eyelidBottom = document.querySelector('.eyelid-bottom');
+        let isBlinking = false;
+
+        function blink() {
+            if (isBlinking || !document.body.classList.contains('dark')) return;
+            isBlinking = true;
+
+            // Close lids
+            eyelidTop.style.transition = 'd 120ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+            eyelidBottom.style.transition = 'd 120ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+            sauronEye.classList.add('blinking');
+
+            setTimeout(() => {
+                sauronEye.classList.remove('blinking');
+                setTimeout(() => {
+                    isBlinking = false;
+                }, 120);
+            }, 150);
+        }
+
+        // Random blink every 2-6 seconds
+        function scheduleBlink() {
+            const delay = 2000 + Math.random() * 4000;
+            setTimeout(() => {
+                blink();
+                scheduleBlink();
+            }, delay);
+        }
+        scheduleBlink();
+
+        // Also blink on click anywhere
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#theme-toggle')) {
+                blink();
+            }
         });
     </script>
 

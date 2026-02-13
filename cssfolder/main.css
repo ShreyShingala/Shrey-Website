@@ -4,15 +4,121 @@
     box-sizing: border-box;
 }
 
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #fff;
-    color: #111;
-    line-height: 1.6;
-    transition: background 0.3s, color 0.3s;
+html {
+    scroll-behavior: smooth;
 }
 
-/* Nav */
+/* ============================================
+   THE SHIRE (Light Mode)
+   Warm parchment, golden afternoon, Bag End
+   ============================================ */
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f5f0e8;
+    color: #2c2416;
+    line-height: 1.6;
+    position: relative;
+    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Texture overlays — cross-fade because background-image can't transition */
+body::before,
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    transition: opacity 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Shire texture (warm parchment grain) */
+body::before {
+    background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(180, 160, 120, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(160, 140, 100, 0.03) 0%, transparent 40%),
+        radial-gradient(ellipse at 50% 80%, rgba(170, 150, 110, 0.03) 0%, transparent 45%);
+    opacity: 1;
+}
+
+/* Mordor texture (ember undertones) */
+body::after {
+    background-image:
+        radial-gradient(ellipse at 20% 50%, rgba(60, 20, 10, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(50, 15, 5, 0.06) 0%, transparent 40%),
+        radial-gradient(ellipse at 50% 80%, rgba(55, 18, 8, 0.05) 0%, transparent 45%);
+    opacity: 0;
+}
+
+body.dark::before {
+    opacity: 0;
+}
+
+body.dark::after {
+    opacity: 1;
+}
+
+/* ---- Eye of Sauron ---- */
+
+.sauron-eye {
+    position: fixed;
+    top: 80px;
+    right: 40px;
+    width: 140px;
+    height: 84px;
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 600ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sauron-eye svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Only visible in dark mode */
+body.dark .sauron-eye {
+    opacity: 1;
+}
+
+/* Blink animation — squeeze the eye shut via clip path override */
+.sauron-eye.blinking .eyelid-top {
+    d: path("M10,60 Q100,50 190,60");
+}
+
+.sauron-eye.blinking .eyelid-bottom {
+    d: path("M10,60 Q100,70 190,60");
+}
+
+.eyelid-top, .eyelid-bottom {
+    transition: d 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Fire flicker animations */
+.fire-flicker-1 {
+    animation: flicker1 2.5s ease-in-out infinite;
+}
+
+.fire-flicker-2 {
+    animation: flicker2 3.2s ease-in-out infinite;
+}
+
+@keyframes flicker1 {
+    0%, 100% { opacity: 0.15; transform: translate(0, 0); }
+    33% { opacity: 0.25; transform: translate(2px, -1px); }
+    66% { opacity: 0.1; transform: translate(-1px, 1px); }
+}
+
+@keyframes flicker2 {
+    0%, 100% { opacity: 0.1; transform: translate(0, 0); }
+    40% { opacity: 0.2; transform: translate(-2px, 1px); }
+    70% { opacity: 0.08; transform: translate(1px, -1px); }
+}
+
+/* ---- Nav ---- */
 
 nav {
     display: flex;
@@ -21,17 +127,23 @@ nav {
     padding: 1.25rem 2rem;
     position: sticky;
     top: 0;
-    background: #fff;
+    background: rgba(245, 240, 232, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 10;
-    border-bottom: 1px solid #eee;
-    transition: background 0.3s, border-color 0.3s;
+    border-bottom: 1px solid #d4c9b5;
+    transition: background 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .nav-name {
+    font-family: 'Cinzel', serif;
     font-weight: 600;
     font-size: 1rem;
-    color: #111;
+    color: #2c2416;
     text-decoration: none;
+    letter-spacing: 0.5px;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .nav-links {
@@ -41,34 +153,40 @@ nav {
 }
 
 .nav-links a {
-    color: #555;
+    color: #6b5d4f;
     text-decoration: none;
     font-size: 0.9rem;
-    transition: color 0.2s;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .nav-links a:hover {
-    color: #111;
+    color: #2c2416;
 }
+
+/* ---- The One Ring (theme toggle) ---- */
 
 #theme-toggle {
     background: none;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-    color: #555;
+    border: none;
+    padding: 0.25rem;
     cursor: pointer;
-    font-family: inherit;
-    transition: border-color 0.2s, color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: filter 200ms, transform 200ms;
 }
 
 #theme-toggle:hover {
-    border-color: #999;
-    color: #111;
+    filter: drop-shadow(0 0 8px rgba(201, 168, 76, 0.5));
+    transform: scale(1.1);
 }
 
-/* Main */
+.ring-icon {
+    display: block;
+}
+
+/* ---- Main ---- */
 
 main {
     max-width: 720px;
@@ -76,78 +194,106 @@ main {
     padding: 0 1.5rem;
 }
 
-/* Hero */
+/* ---- Hero — The Inscription ---- */
 
 .hero {
-    padding: 6rem 0 4rem;
-    border-bottom: 1px solid #eee;
+    padding: 6rem 0 2rem;
 }
 
-.hero h1 {
-    font-size: 2.5rem;
+.hero-name {
+    font-family: 'Cinzel', serif;
+    font-size: 2.8rem;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: 1px;
     margin-bottom: 0.5rem;
+    animation: inscription-glow 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+@keyframes inscription-glow {
+    0%, 100% {
+        text-shadow: 0 0 20px rgba(201, 168, 76, 0), 0 0 40px rgba(201, 168, 76, 0);
+    }
+    50% {
+        text-shadow: 0 0 20px rgba(201, 168, 76, 0.15), 0 0 40px rgba(201, 168, 76, 0.08);
+    }
 }
 
 .subtitle {
-    color: #666;
-    font-size: 1.1rem;
+    color: #6b5d4f;
+    font-size: 1.05rem;
+    font-style: italic;
     margin-bottom: 1.5rem;
+    letter-spacing: 0.3px;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .links {
     display: flex;
-    gap: 1.25rem;
+    gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .links a {
-    color: #555;
+    color: #6b5d4f;
     text-decoration: none;
-    font-size: 0.9rem;
-    border-bottom: 1px solid transparent;
-    transition: color 0.2s, border-color 0.2s;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid #c4b896;
+    border-radius: 2px;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    letter-spacing: 0.3px;
 }
 
 .links a:hover {
-    color: #111;
-    border-bottom-color: #111;
+    color: #2c2416;
+    border-color: #8a7d3a;
+    background: rgba(138, 125, 58, 0.06);
 }
 
-/* Sections */
+/* ---- Tengwar Dividers ---- */
+
+.divider {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    height: 40px;
+    margin: 2.5rem auto 0;
+    color: #8a7d3a;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---- Sections ---- */
 
 section {
     padding: 4rem 0;
-    border-bottom: 1px solid #eee;
-}
-
-section:last-child {
-    border-bottom: none;
 }
 
 h2 {
+    font-family: 'Cinzel', serif;
     font-size: 1.5rem;
     font-weight: 600;
     margin-bottom: 1.5rem;
-    letter-spacing: -0.3px;
+    letter-spacing: 0.5px;
+    color: #2c2416;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 #about p {
-    color: #444;
+    color: #4a3f33;
     font-size: 1.05rem;
     max-width: 600px;
-    line-height: 1.7;
+    line-height: 1.75;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Projects */
+/* ---- Project Cards — Map Fragments ---- */
 
 .project-grid {
     display: flex;
     flex-direction: column;
-    gap: 1px;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    overflow: hidden;
+    gap: 0;
 }
 
 .project {
@@ -155,202 +301,207 @@ h2 {
     text-decoration: none;
     color: inherit;
     padding: 1.5rem;
-    background: #fafafa;
-    transition: background 0.2s;
-    border-bottom: 1px solid #eee;
-}
-
-.project:last-child {
-    border-bottom: none;
+    padding-left: 1.75rem;
+    background-color: #eae4d6;
+    border-left: 2px solid #c4b896;
+    margin-bottom: 2px;
+    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .project:hover {
-    background: #f0f0f0;
+    border-left-color: #c9a84c;
+    box-shadow: 0 0 20px rgba(201, 168, 76, 0.12), 0 0 4px rgba(201, 168, 76, 0.08);
+    background-color: #ede8db;
 }
 
 .project h3 {
+    font-family: 'Cinzel', serif;
     font-size: 1.05rem;
     font-weight: 600;
     margin-bottom: 0.4rem;
+    letter-spacing: 0.3px;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .project p {
-    color: #555;
+    color: #5a4e41;
     font-size: 0.9rem;
-    line-height: 1.5;
-    margin-bottom: 0.5rem;
+    line-height: 1.55;
+    margin-bottom: 0.6rem;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Tech tags — fellowship badges */
+
+.tech-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
 }
 
 .tech {
-    font-size: 0.8rem;
-    color: #888;
+    font-size: 0.72rem;
+    color: #7a6e5a;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #c4b896;
+    border-radius: 2px;
+    letter-spacing: 0.3px;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Contact */
-
-#contact p {
-    color: #666;
-    margin-bottom: 1.5rem;
+.project:hover .tech {
+    border-color: #b09e6e;
 }
 
-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    max-width: 480px;
-}
-
-input, textarea {
-    padding: 0.6rem 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    font-family: inherit;
-    background: #fafafa;
-    transition: border-color 0.2s;
-}
-
-input:focus, textarea:focus {
-    outline: none;
-    border-color: #999;
-}
-
-button[type="submit"] {
-    align-self: flex-start;
-    padding: 0.6rem 1.5rem;
-    background: #111;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-button[type="submit"]:hover {
-    background: #333;
-}
-
-/* Footer */
+/* ---- Footer ---- */
 
 footer {
     text-align: center;
-    padding: 2rem;
-    color: #999;
-    font-size: 0.8rem;
+    padding: 3rem 1.5rem;
 }
 
-/* Dark mode */
+.footer-quote {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    color: #a89a82;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+    font-style: italic;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+footer a {
+    color: #6b5d4f;
+    text-decoration: none;
+    font-size: 0.85rem;
+    border-bottom: 1px solid transparent;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+footer a:hover {
+    color: #2c2416;
+    border-bottom-color: #8a7d3a;
+}
+
+/* ============================================
+   MORDOR (Dark Mode)
+   Volcanic black, ember glow, molten gold
+   ============================================ */
 
 body.dark {
-    background: #111;
-    color: #e0e0e0;
+    background-color: #0d0d0d;
+    color: #d4c9b5;
 }
 
 body.dark nav {
-    background: #111;
-    border-bottom-color: #222;
+    background: rgba(13, 13, 13, 0.92);
+    border-bottom-color: #2a2420;
 }
 
 body.dark .nav-name {
-    color: #e0e0e0;
+    color: #d4c9b5;
 }
 
 body.dark .nav-links a {
-    color: #999;
+    color: #8a8278;
 }
 
 body.dark .nav-links a:hover {
-    color: #e0e0e0;
-}
-
-body.dark #theme-toggle {
-    border-color: #333;
-    color: #999;
+    color: #d4c9b5;
 }
 
 body.dark #theme-toggle:hover {
-    border-color: #555;
-    color: #e0e0e0;
+    filter: drop-shadow(0 0 12px rgba(201, 168, 76, 0.6));
 }
 
-body.dark .hero {
-    border-bottom-color: #222;
+body.dark .hero-name {
+    animation-name: inscription-glow-dark;
+}
+
+@keyframes inscription-glow-dark {
+    0%, 100% {
+        text-shadow: 0 0 20px rgba(201, 168, 76, 0), 0 0 40px rgba(201, 168, 76, 0);
+    }
+    50% {
+        text-shadow: 0 0 24px rgba(201, 168, 76, 0.3), 0 0 48px rgba(180, 100, 30, 0.12);
+    }
 }
 
 body.dark .subtitle {
-    color: #888;
+    color: #8a8278;
 }
 
 body.dark .links a {
-    color: #999;
+    color: #8a8278;
+    border-color: #3a3228;
 }
 
 body.dark .links a:hover {
-    color: #e0e0e0;
-    border-bottom-color: #e0e0e0;
+    color: #d4c9b5;
+    border-color: #c9a84c;
+    background: rgba(201, 168, 76, 0.06);
 }
 
-body.dark section {
-    border-bottom-color: #222;
+body.dark .divider {
+    color: #c9a84c;
+}
+
+body.dark h2 {
+    color: #d4c9b5;
 }
 
 body.dark #about p {
-    color: #aaa;
-}
-
-body.dark .project-grid {
-    border-color: #222;
+    color: #9a9084;
 }
 
 body.dark .project {
-    background: #1a1a1a;
-    border-bottom-color: #222;
+    background-color: #171311;
+    border-left-color: #3a3228;
 }
 
 body.dark .project:hover {
-    background: #222;
+    border-left-color: #c9a84c;
+    box-shadow: 0 0 24px rgba(201, 168, 76, 0.1), 0 0 6px rgba(201, 168, 76, 0.06);
+    background-color: #1f1b17;
+}
+
+body.dark .project h3 {
+    color: #d4c9b5;
 }
 
 body.dark .project p {
-    color: #999;
+    color: #8a8278;
 }
 
 body.dark .tech {
-    color: #666;
+    color: #7a7268;
+    border-color: #3a3228;
 }
 
-body.dark #contact p {
-    color: #888;
+body.dark .project:hover .tech {
+    border-color: #5a4e3a;
 }
 
-body.dark input,
-body.dark textarea {
-    background: #1a1a1a;
-    border-color: #333;
-    color: #e0e0e0;
+body.dark .footer-quote {
+    color: #5a5248;
 }
 
-body.dark input:focus,
-body.dark textarea:focus {
-    border-color: #555;
+body.dark footer a {
+    color: #8a8278;
 }
 
-body.dark button[type="submit"] {
-    background: #e0e0e0;
-    color: #111;
+body.dark footer a:hover {
+    color: #d4c9b5;
+    border-bottom-color: #c9a84c;
 }
 
-body.dark button[type="submit"]:hover {
-    background: #ccc;
-}
-
-body.dark footer {
-    color: #555;
-}
-
-/* Responsive */
+/* ============================================
+   Responsive — The Map Folds
+   ============================================ */
 
 @media (max-width: 640px) {
     nav {
@@ -362,10 +513,10 @@ body.dark footer {
     }
 
     .hero {
-        padding: 4rem 0 3rem;
+        padding: 4rem 0 1.5rem;
     }
 
-    .hero h1 {
+    .hero-name {
         font-size: 2rem;
     }
 
@@ -375,5 +526,22 @@ body.dark footer {
 
     section {
         padding: 3rem 0;
+    }
+
+    .divider {
+        max-width: 280px;
+    }
+
+    .sauron-eye {
+        width: 100px;
+        height: 60px;
+        right: 16px;
+        top: 70px;
+    }
+}
+
+@media (max-width: 420px) {
+    .sauron-eye {
+        display: none;
     }
 }
