@@ -5,70 +5,210 @@
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;
 
-// Check for saved theme or default to system preference
+// Check for saved theme; default to dark
 const savedTheme = localStorage.getItem('theme');
-const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 if (savedTheme) {
     body.classList.toggle('dark', savedTheme === 'dark');
-} else if (systemPrefersDark) {
+} else {
     body.classList.add('dark');
 }
 
+// ============================================
+// Cinematic Theme Transition
+// ============================================
+let isTransitioning = false;
+// Forced cinematic blink state declarations (defined early so handlers can use them)
+let forcedBlinkTarget = null; // null = normal, 0 = force open, 1 = force close
+let forcedBlinkFrom = 0;
+let forcedBlinkDuration = 0;
+let forcedBlinkStart = 0;
+let forcedBlinkCallback = null;
+
+// Expose clearForcedBlink globally so top-level handlers (theme toggle, clicks)
+// can cancel forced cinematic blink state. This intentionally operates on the
+// shared `forcedBlink*` variables declared above.
+function clearForcedBlink() {
+    forcedBlinkTarget = null;
+    forcedBlinkFrom = 0;
+    forcedBlinkDuration = 0;
+    forcedBlinkStart = 0;
+    forcedBlinkCallback = null;
+}
+
+let transitionTarget = null; // 'dark' | 'light' | null
+let transitionSafetyTimer = null;
+let transitionOverlayFadeTimer = null;
+
 themeToggle?.addEventListener('click', () => {
-    body.classList.toggle('dark');
-    localStorage.setItem('theme', body.classList.contains('dark') ? 'dark' : 'light');
+    // overlay element removed; keep variable for compatibility if needed
+    const overlay = null;
+
+    const currentlyDark = body.classList.contains('dark');
+    const requestedGoingDark = !currentlyDark;
+
+    // If a transition is already running and user clicks, reverse it.
+    if (isTransitioning) {
+        const currentTargetIsDark = transitionTarget === 'dark';
+        // If the user clicked to request the same direction, ignore.
+        if (currentTargetIsDark === requestedGoingDark) return;
+
+        // Clear any safety timer and pending overlay fades from the in-progress transition
+        if (transitionSafetyTimer) { clearTimeout(transitionSafetyTimer); transitionSafetyTimer = null; }
+        if (transitionOverlayFadeTimer) { clearTimeout(transitionOverlayFadeTimer); transitionOverlayFadeTimer = null; }
+
+        // Clear any forced blink state to allow the new cinematic to run cleanly
+        clearForcedBlink();
+
+        // Fall through to start the opposite transition below
+    } else {
+        isTransitioning = true;
+    }
+
+    // Mark what we're targeting now
+    transitionTarget = requestedGoingDark ? 'dark' : 'light';
+
+    if (requestedGoingDark) {
+        // Going dark: apply class, then eye opens from closed
+        body.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+
+        // Ensure any previous forced transitions are cleared, then force eye open
+        clearForcedBlink();
+        if (window._sauronForceEyeOpen) {
+            window._sauronForceEyeOpen(800);
+        }
+
+        // Complete transition after cinematic delay
+        transitionOverlayFadeTimer = setTimeout(() => {
+            isTransitioning = false;
+            transitionTarget = null;
+            transitionOverlayFadeTimer = null;
+        }, 1000);
+
+    } else {
+        // Going light: eye closes, flash, then remove dark
+        // Safety: always unlock after max 2 seconds no matter what
+        transitionSafetyTimer = setTimeout(() => {
+            body.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+            isTransitioning = false;
+            transitionTarget = null;
+            transitionSafetyTimer = null;
+        }, 2000);
+
+        const finishLight = () => {
+            // Flash light overlay (overlay removed) — no-op
+            // Remove dark mode
+            body.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+
+            // Fade out overlay
+            transitionOverlayFadeTimer = setTimeout(() => {
+                if (transitionSafetyTimer) { clearTimeout(transitionSafetyTimer); transitionSafetyTimer = null; }
+                isTransitioning = false;
+                transitionTarget = null;
+                transitionOverlayFadeTimer = null;
+            }, 500);
+        };
+
+        clearForcedBlink();
+        if (window._sauronForceEyeClose) {
+            window._sauronForceEyeClose(400, finishLight);
+        } else {
+            finishLight();
+        }
+    }
 });
 
-
 // ============================================
-//  EYE OF SAURON — Cinematic Canvas Engine
-//  Full-viewport canvas with tower, eye,
-//  fire particles, beam, and cursor glow
+// "My Precious" Easter Egg
 // ============================================
+let preciousClicks = [];
+let preciousCooldown = false;
 
-(function sauronEngine() {
-    const canvas = document.getElementById('sauron-canvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+themeToggle?.addEventListener('click', () => {
+    if (preciousCooldown) return;
 
-    // ---- State ----
-    let W = 0, H = 0;
-    let mouse = { x: -9999, y: -9999 };
-    let smoothMouse = { x: -9999, y: -9999 };
-    let particles = [];
-    let embers = [];
-    let blinkProgress = 0;
-    let isBlinking = false;
-    let dpr = 1;
+    const now = Date.now();
+    preciousClicks.push(now);
+    preciousClicks = preciousClicks.filter(t => now - t < 1000);
 
-    // ---- Config ----
-    const TOWER_RIGHT_MARGIN = 60;   // px from right edge
-    const TOWER_WIDTH = 90;          // px
-    const EYE_Y_RATIO = 0.18;       // how far down the viewport the eye sits
+    if (preciousClicks.length >= 3) {
+        preciousClicks = [];
+        preciousCooldown = true;
 
-    // ---- Resize ----
-    function resize() {
-        dpr = window.devicePixelRatio || 1;
-        W = window.innerWidth;
-        H = window.innerHeight;
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-        canvas.style.width = W + 'px';
-        canvas.style.height = H + 'px';
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const pOverlay = document.getElementById('precious-overlay');
+        const toggle = document.getElementById('theme-toggle');
+        if (pOverlay) pOverlay.classList.add('active');
+        if (toggle) toggle.classList.add('precious-active');
+
+        setTimeout(() => {
+            if (pOverlay) pOverlay.classList.remove('active');
+            if (toggle) toggle.classList.remove('precious-active');
+            preciousCooldown = false;
+        }, 2500);
     }
-    window.addEventListener('resize', resize);
-    resize();
+});
+        (function sauronEngine() {
+            const canvas = document.getElementById('sauron-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+
+            // ---- State ----
+            let W = 0, H = 0;
+            let mouse = { x: -9999, y: -9999 };
+            
+            let cursorPresent = false;
+            let hasSeenCursor = false;
+            let smoothMouse = { x: -9999, y: -9999 };
+            let particles = [];
+            let embers = [];
+            let blinkProgress = 0;
+            let isBlinking = false;
+            let dpr = 1;
+            // Track recent document clicks to detect rapid triple-clicks
+            // (used by the emergency blink reset handler)
+            let docClickTimes = [];
+            let lastBlinkProgressChange = performance.now();
+            let prevBlinkProgress = blinkProgress;
+
+            // Lightning state
+            let lightningActive = false;
+            let lightningStartTime = 0;
+            let lightningBolts = [];
+
+            // ---- Config ----
+            const TOWER_RIGHT_MARGIN = 60;   // px from right edge
+            const TOWER_WIDTH = 90;          // px
+            const EYE_Y_RATIO = 0.18;       // how far down the viewport the eye sits
+
+            // ---- Resize ----
+            function resize() {
+                dpr = window.devicePixelRatio || 1;
+                W = window.innerWidth;
+                H = window.innerHeight;
+                canvas.width = W * dpr;
+                canvas.height = H * dpr;
+                canvas.style.width = W + 'px';
+                canvas.style.height = H + 'px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            window.addEventListener('resize', resize);
+            resize();
 
     // ---- Mouse ----
     document.addEventListener('mousemove', e => {
         mouse.x = e.clientX;
         mouse.y = e.clientY;
+        cursorPresent = true;
+        hasSeenCursor = true;
+    });
+    document.addEventListener('mouseenter', () => {
+        cursorPresent = true;
     });
     document.addEventListener('mouseleave', () => {
-        mouse.x = W / 2;
-        mouse.y = H / 2;
+        cursorPresent = false;
     });
 
     // ---- Eye position ----
@@ -486,12 +626,14 @@ themeToggle?.addEventListener('click', () => {
     //  THE EYE — Fiery slit-pupil Sauron eye
     // ================================================================
     function drawEye(cx, cy, time) {
-        const openness = 1 - blinkProgress;
+        // Clamp openness to valid [0,1] range to avoid negative radii
+        let openness = 1 - blinkProgress;
+        openness = Math.max(0, Math.min(1, openness));
         if (openness < 0.02) return;
 
         // Eye dimensions
         const eyeW = 70;
-        const eyeH = 30 * openness;
+        const eyeH = Math.max(0, 30 * openness);
 
         // Track cursor
         const dx = mouse.x - cx;
@@ -574,7 +716,11 @@ themeToggle?.addEventListener('click', () => {
 
         // --------------- SLIT PUPIL ---------------
         const slitW = 4 + Math.sin(time * 0.003) * 0.8;
-        const slitH = (eyeH * 1.6 + Math.sin(time * 0.002) * 3) * openness;
+        // Compute raw slit height then clamp to a small positive value to avoid
+        // negative minor-axis radii when openness is very small and the
+        // sine term swings negative.
+        const slitHRaw = (eyeH * 1.6 + Math.sin(time * 0.002) * 3) * openness;
+        const slitH = Math.max(0.5, slitHRaw);
 
         // Pupil dark core
         ctx.fillStyle = '#050000';
@@ -651,12 +797,14 @@ themeToggle?.addEventListener('click', () => {
     //  BEAM — from eye to cursor
     // ================================================================
     function drawBeam(eyeX, eyeY, time) {
+        if (!hasSeenCursor) return;
         const dx = mouse.x - eyeX;
         const dy = mouse.y - eyeY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 50 || mouse.x < 0) return;
+        if (dist < 50) return;
 
-        const openness = 1 - blinkProgress;
+        let openness = 1 - blinkProgress;
+        openness = Math.max(0, Math.min(1, openness));
         if (openness < 0.1) return;
 
         ctx.save();
@@ -709,8 +857,9 @@ themeToggle?.addEventListener('click', () => {
     //  CURSOR GLOW — warm fuzzy circle that ebbs and flows
     // ================================================================
     function drawCursorGlow(time) {
-        if (mouse.x < 0) return;
-        const openness = 1 - blinkProgress;
+        if (!cursorPresent) return;
+        let openness = 1 - blinkProgress;
+        openness = Math.max(0, Math.min(1, openness));
         if (openness < 0.1) return;
 
         ctx.save();
@@ -764,8 +913,156 @@ themeToggle?.addEventListener('click', () => {
         ctx.arc(smoothMouse.x, smoothMouse.y, pulse * 0.7, 0, Math.PI * 2);
         ctx.stroke();
 
+        // Small fiery tendrils — Sauron's gaze licking outward
+        const tendrilCount = 10;
+        for (let i = 0; i < tendrilCount; i++) {
+            // Each tendril has a slowly drifting base angle
+            const baseAng = (i / tendrilCount) * Math.PI * 2;
+            const drift = Math.sin(time * 0.0015 + i * 2.3) * 0.4
+                        + Math.sin(time * 0.003 + i * 1.1) * 0.2;
+            const ang = baseAng + drift;
+
+            // Length varies per tendril — some short, some longer
+            const lenPhase = Math.sin(time * (0.003 + i * 0.0007) + i * 1.7);
+            const len = pulse * 0.15 + lenPhase * pulse * 0.15;
+
+            // Start at the glow edge
+            const startR = pulse * 0.5;
+            const sx = smoothMouse.x + Math.cos(ang) * startR;
+            const sy = smoothMouse.y + Math.sin(ang) * startR;
+            const ex = smoothMouse.x + Math.cos(ang) * (startR + len);
+            const ey = smoothMouse.y + Math.sin(ang) * (startR + len);
+
+            // Slight curve via a wobbling control point
+            const wobble = Math.sin(time * 0.004 + i * 3.3) * 12;
+            const perpAng = ang + Math.PI * 0.5;
+            const cpx = (sx + ex) * 0.5 + Math.cos(perpAng) * wobble;
+            const cpy = (sy + ey) * 0.5 + Math.sin(perpAng) * wobble;
+
+            // Tendril alpha flickers independently
+            const flicker = 0.5 + Math.sin(time * (0.005 + i * 0.002) + i * 4.1) * 0.4;
+            const tAlpha = intensity * flicker * 0.2 * openness;
+
+            // Tapered width
+            const tWidth = 1.5 + Math.sin(time * 0.003 + i) * 0.5;
+
+            const tGrad = ctx.createLinearGradient(sx, sy, ex, ey);
+            tGrad.addColorStop(0, `rgba(255, 140, 30, ${tAlpha})`);
+            tGrad.addColorStop(0.5, `rgba(255, 80, 10, ${tAlpha * 0.5})`);
+            tGrad.addColorStop(1, 'rgba(200, 40, 0, 0)');
+            ctx.strokeStyle = tGrad;
+            ctx.lineWidth = tWidth;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.quadraticCurveTo(cpx, cpy, ex, ey);
+            ctx.stroke();
+        }
+
         ctx.restore();
     }
+
+    // ================================================================
+    //  LIGHTNING — rare red flashes behind the tower
+    // ================================================================
+    const LIGHTNING_DURATION = 420;
+
+    function generateBolts() {
+        const eye = getEyePos();
+        const bolts = [];
+        const count = 1 + Math.floor(Math.random() * 3); // 1-3 bolts
+        for (let b = 0; b < count; b++) {
+            const segments = [];
+            let x = eye.x + (Math.random() - 0.5) * 250;
+            let y = 0;
+            segments.push({ x, y });
+            while (y < H * 0.7) {
+                x += (Math.random() - 0.5) * 40;
+                y += 15 + Math.random() * 25;
+                segments.push({ x, y });
+                // Occasional branch
+                if (Math.random() > 0.85 && segments.length > 2) {
+                    const branchSegs = [];
+                    let bx = x, by = y;
+                    const branchLen = 2 + Math.floor(Math.random() * 3);
+                    for (let i = 0; i < branchLen; i++) {
+                        bx += (Math.random() - 0.5) * 30 + (Math.random() > 0.5 ? 15 : -15);
+                        by += 10 + Math.random() * 15;
+                        branchSegs.push({ x: bx, y: by });
+                    }
+                    bolts.push({ segments: [{ x, y }, ...branchSegs], width: 1.8 });
+                }
+            }
+            bolts.push({ segments, width: 2 + Math.random() * 2 });
+        }
+        return bolts;
+    }
+
+    function drawLightning() {
+        if (!lightningActive) return;
+        const elapsed = performance.now() - lightningStartTime;
+        if (elapsed > LIGHTNING_DURATION) {
+            lightningActive = false;
+            return;
+        }
+
+        // Double-flash alpha (two spikes within the duration)
+        const t = elapsed / LIGHTNING_DURATION;
+        const flash1 = Math.max(0, Math.sin(t * Math.PI * 3) * (1 - t));
+        const flash2 = Math.max(0, Math.sin(t * Math.PI * 5 + 1) * (1 - t) * 0.5);
+        const rawAlpha = Math.min(flash1 + flash2, 1);
+        const alpha = Math.min(rawAlpha * 1.2, 1);
+
+        if (alpha < 0.02) return;
+
+        ctx.save();
+
+        // red/orange screen wash
+        ctx.fillStyle = `rgba(120, 40, 12, ${alpha * 0.12})`;
+        ctx.fillRect(0, 0, W, H);
+
+        // Draw bolts
+        ctx.globalCompositeOperation = 'lighter';
+        for (const bolt of lightningBolts) {
+            if (bolt.segments.length < 2) continue;
+
+            // Glow pass
+            ctx.strokeStyle = `rgba(240, 100, 40, ${alpha * 0.35})`;
+            ctx.lineWidth = bolt.width + 8;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.beginPath();
+            ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
+            for (let i = 1; i < bolt.segments.length; i++) {
+                ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
+            }
+            ctx.stroke();
+
+            // Core pass 
+            ctx.strokeStyle = `rgba(255, 180, 80, ${alpha * 0.9})`;
+            ctx.lineWidth = Math.max(1, bolt.width * 1.6);
+            ctx.beginPath();
+            ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
+            for (let i = 1; i < bolt.segments.length; i++) {
+                ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
+            }
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
+    // Schedule lightning every 15-45 seconds
+    (function scheduleLightning() {
+        setTimeout(() => {
+            if (body.classList.contains('dark') && !lightningActive) {
+                lightningActive = true;
+                lightningStartTime = performance.now();
+                lightningBolts = generateBolts();
+            }
+            scheduleLightning();
+        }, 15000 + Math.random() * 30000);
+    })();
 
     // ================================================================
     //  BLINK SYSTEM — driven by main render loop, not separate rAF
@@ -774,17 +1071,106 @@ themeToggle?.addEventListener('click', () => {
     const BLINK_CLOSE = 90, BLINK_HOLD = 70, BLINK_OPEN = 140;
     const BLINK_TOTAL = BLINK_CLOSE + BLINK_HOLD + BLINK_OPEN;
 
+    window._sauronForceEyeOpen = function(durationMs) {
+        // Mark as busy so other blinks won't interrupt this cinematic transition
+        isBlinking = true;
+        forcedBlinkCallback = null;
+        forcedBlinkFrom = 1;
+        forcedBlinkTarget = 0;
+        forcedBlinkDuration = durationMs;
+        forcedBlinkStart = performance.now();
+        blinkProgress = 1;
+    };
+
+    window._sauronForceEyeClose = function(durationMs, callback) {
+        // Mark as busy so this forced close isn't interrupted by user clicks
+        isBlinking = true;
+        forcedBlinkCallback = null;
+        forcedBlinkFrom = blinkProgress; // start from current state
+        forcedBlinkTarget = 1;
+        forcedBlinkDuration = durationMs;
+        forcedBlinkStart = performance.now();
+        forcedBlinkCallback = callback;
+    };
+
     function triggerBlink() {
-        if (isBlinking) return;
+        if (isBlinking || forcedBlinkTarget !== null) return;
         isBlinking = true;
         blinkStartTime = performance.now();
     }
 
     // Called every frame from render() to update blinkProgress
     function updateBlink() {
-        if (!isBlinking) {
+        // Sanity recover
+        if (!isFinite(blinkProgress) || Number.isNaN(blinkProgress)) {
             blinkProgress = 0;
+            isBlinking = false;
+            clearForcedBlink();
+        }
+
+        // Forced cinematic transition
+        if (forcedBlinkTarget !== null) {
+            const elapsed = performance.now() - forcedBlinkStart;
+
+            if (elapsed > 3000) {
+                blinkProgress = 0;
+                isBlinking = false;
+                const cb = forcedBlinkCallback;
+                clearForcedBlink();
+                if (cb) cb();
+                return;
+            }
+
+            if (forcedBlinkDuration <= 0) {
+                const val = forcedBlinkTarget;
+                const cb = forcedBlinkCallback;
+                clearForcedBlink();
+                blinkProgress = val;
+                isBlinking = false;
+                if (cb) cb();
+                return;
+            }
+            const t = Math.min(elapsed / forcedBlinkDuration, 1);
+            
+            // Ease in-out quad
+            const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            blinkProgress = forcedBlinkFrom + (forcedBlinkTarget - forcedBlinkFrom) * eased;
+            if (t >= 1) {
+                const finalVal = forcedBlinkTarget;
+                const cb = forcedBlinkCallback;
+                clearForcedBlink();
+                blinkProgress = finalVal;
+                isBlinking = false;
+                if (cb) cb();
+            }
+            // Clamp to valid range
+            blinkProgress = Math.max(0, Math.min(1, blinkProgress));
             return;
+        }
+
+        // If not actively blinking, ensure we aren't accidentally left fully closed.
+        if (!isBlinking) {
+            if (blinkProgress > 0.98) {
+                blinkProgress = 0;
+            } else {
+                blinkProgress = 0;
+            }
+            return;
+        }
+
+        if (blinkProgress !== prevBlinkProgress) {
+            prevBlinkProgress = blinkProgress;
+            lastBlinkProgressChange = performance.now();
+        }
+
+        if (forcedBlinkTarget === null && !isBlinking && blinkProgress >= 0.999) {
+            const stuckMs = performance.now() - lastBlinkProgressChange;
+            if (stuckMs > 1200) {
+                console.warn('[sauron] watchdog: blink stuck closed for', Math.round(stuckMs), 'ms — recovering');
+                blinkProgress = 0;
+                isBlinking = false;
+                clearForcedBlink();
+            }
         }
         const t = performance.now() - blinkStartTime;
         if (t < BLINK_CLOSE) {
@@ -794,10 +1180,11 @@ themeToggle?.addEventListener('click', () => {
         } else if (t < BLINK_TOTAL) {
             blinkProgress = 1 - (t - BLINK_CLOSE - BLINK_HOLD) / BLINK_OPEN;
         } else {
-            // Blink finished — guarantee clean state
             blinkProgress = 0;
             isBlinking = false;
         }
+
+        blinkProgress = Math.max(0, Math.min(1, blinkProgress));
     }
 
     (function scheduleBlink() {
@@ -808,7 +1195,44 @@ themeToggle?.addEventListener('click', () => {
     })();
 
     document.addEventListener('click', e => {
-        if (!e.target.closest('#theme-toggle') && body.classList.contains('dark')) triggerBlink();
+        if (e.target.closest('#theme-toggle')) return;
+        if (!body.classList.contains('dark')) return;
+
+        if (isBlinking || forcedBlinkTarget !== null) {
+            console.debug('[sauron] click ignored during active blink/transition', { blinkProgress, isBlinking, forcedBlinkTarget });
+            return;
+        }
+
+        const now = Date.now();
+        docClickTimes.push(now);
+        // keep only last 1s of clicks
+        docClickTimes = docClickTimes.filter(t => now - t < 1000);
+
+        if (docClickTimes.length >= 3) {
+            docClickTimes = [];
+            forcedBlinkTarget = null;
+            forcedBlinkCallback = null;
+            forcedBlinkDuration = 0;
+            forcedBlinkStart = 0;
+
+            forcedBlinkFrom = 1;
+            forcedBlinkTarget = 0;
+            forcedBlinkDuration = 220;
+            forcedBlinkStart = performance.now();
+            blinkProgress = 1;
+            isBlinking = true;
+
+            return;
+        }
+
+        console.debug('[sauron] click:', { blinkProgress, isBlinking, forcedBlinkTarget });
+
+        if (blinkProgress >= 0.98) {
+            blinkProgress = 0;
+            isBlinking = false;
+        }
+
+        triggerBlink();
     });
 
     // ================================================================
@@ -817,7 +1241,7 @@ themeToggle?.addEventListener('click', () => {
     function render(time) {
         const isDark = body.classList.contains('dark');
 
-        // Always update blink state — prevents stuck-closed eye
+        // Always update blink state
         updateBlink();
 
         ctx.clearRect(0, 0, W, H);
@@ -829,11 +1253,14 @@ themeToggle?.addEventListener('click', () => {
             return;
         }
 
-        // Smooth mouse tracking (lagging softly behind real cursor)
+        // Smooth mouse tracking
         smoothMouse.x += (mouse.x - smoothMouse.x) * 0.1;
         smoothMouse.y += (mouse.y - smoothMouse.y) * 0.1;
 
         const eye = getEyePos();
+
+        // --- Lightning behind everything ---
+        drawLightning();
 
         // --- Draw tower behind everything ---
         drawTower(eye.x, eye.y);
@@ -848,7 +1275,7 @@ themeToggle?.addEventListener('click', () => {
             }
         }
 
-        // Update & draw particles (behind the eye)
+        // Update & draw particles
         ctx.save();
         particles = particles.filter(p => p.life > 0);
         for (const p of particles) { p.update(); p.draw(ctx); }

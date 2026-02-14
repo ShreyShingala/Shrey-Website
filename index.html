@@ -22,7 +22,7 @@
             <a href="#projects">Projects</a>
             <a href="mailto:shreyshingala1@gmail.com">Contact</a>
             <button id="theme-toggle" aria-label="Toggle theme">
-                <svg class="ring-icon" width="32" height="32" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <svg class="ring-icon" width="32" height="32" viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">
                     <defs>
                         <linearGradient id="ring-gold" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" stop-color="#e8c44a"/>
@@ -59,6 +59,11 @@
                     <line x1="54" y1="39.5" x2="58" y2="40" stroke="#a88a30" stroke-width="0.5" opacity="0.3"/>
                     <line x1="64" y1="41" x2="68" y2="43" stroke="#a88a30" stroke-width="0.5" opacity="0.4"/>
                     <line x1="72" y1="45" x2="75" y2="47" stroke="#a88a30" stroke-width="0.5" opacity="0.35"/>
+                    <!-- Circular inscription text around the ring (appears on hover) -->
+                    <path id="inscription-path" d="M50,12 a38,38 0 1,1 0,76 a38,38 0 1,1 0,-76" fill="none" />
+                    <text class="ring-svg-text" aria-hidden="true">
+                        <textPath href="#inscription-path" startOffset="50%" text-anchor="middle">Ash nazg durbatuluk, ash nazg gimbatul</textPath>
+                    </text>
                 </svg>
             </button>
         </div>
@@ -203,21 +208,28 @@
 
     <!-- Ring hole color sync (main.js handles all theme toggle logic) -->
     <script>
-        // Update the ring SVG hole fill to match current background
         function updateRingHole() {
             const ringHole = document.querySelector('.ring-hole');
             if (ringHole) {
                 ringHole.setAttribute('fill', document.body.classList.contains('dark') ? '#0d0d0d' : '#f5f0e8');
             }
         }
-        // Run on load
         updateRingHole();
-        // Re-run whenever theme toggles (listen for class changes via click)
+        // Re-run whenever theme toggles
         document.getElementById('theme-toggle')?.addEventListener('click', () => {
-            setTimeout(updateRingHole, 20);
+            setTimeout(updateRingHole, 50);
+            setTimeout(updateRingHole, 500);
+            setTimeout(updateRingHole, 1000);
         });
     </script>
     
+    <!-- "My Precious" easter egg overlay -->
+    <div id="precious-overlay" aria-hidden="true">
+        <span class="precious-text">my precious...</span>
+    </div>
+
+    <!-- Theme transition overlay removed (was causing stuck flashes) -->
+
     <!-- Main JavaScript -->
     <script src="main.js"></script>
 
