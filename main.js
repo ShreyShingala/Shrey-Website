@@ -80,97 +80,343 @@ themeToggle?.addEventListener('click', () => {
     }
 
     // ================================================================
-    //  TOWER — drawn directly onto canvas for perfect alignment
+    //  TOWER OF BARAD-DÛR — multi-tiered dark fortress
     // ================================================================
     function drawTower(ex, ey) {
-        const tw = TOWER_WIDTH;
-        const halfW = tw / 2;
-        const towerTop = ey + 20;  // tower starts just below the eye
-        const towerBot = H + 10;   // extends past viewport bottom
+        const towerTop = ey + 55;   // lower below the eye so prongs are visible
+        const towerBot = H + 10;    // past viewport
+        const totalH = towerBot - towerTop;
 
         ctx.save();
 
-        // Tower body — trapezoidal, wider at base
-        const topHalf = halfW * 0.35;
-        const botHalf = halfW * 1.1;
+        // --- Helper: width at a given fraction (0=top, 1=bottom) ---
+        // Multi-tiered profile: narrow waist, wider base, with setbacks
+        function profileW(t) {
+            // Narrow crown at top, slight bulge, waist, then expanding base
+            if (t < 0.06) return 20 + t / 0.06 * 5;                     // crown neck
+            if (t < 0.15) return 25 + (t - 0.06) / 0.09 * 5;           // upper shaft
+            if (t < 0.18) return 30;                                      // first setback
+            if (t < 0.30) return 21 + (t - 0.18) / 0.12 * 8;           // mid-upper
+            if (t < 0.33) return 29;                                      // second setback
+            if (t < 0.50) return 29 + (t - 0.33) / 0.17 * 10;          // mid tower
+            if (t < 0.53) return 39;                                      // third setback
+            if (t < 0.70) return 39 + (t - 0.53) / 0.17 * 9;           // lower tower
+            if (t < 0.73) return 48;                                      // fourth setback
+            return 48 + (t - 0.73) / 0.27 * 22;                          // fortress base
+        }
 
-        // Main tower gradient
-        const tGrad = ctx.createLinearGradient(ex - botHalf, 0, ex + botHalf, 0);
-        tGrad.addColorStop(0, '#080604');
-        tGrad.addColorStop(0.3, '#12100d');
-        tGrad.addColorStop(0.5, '#1a1714');
-        tGrad.addColorStop(0.7, '#12100d');
-        tGrad.addColorStop(1, '#080604');
+        // --- Main tower body (built from stacked slices for curved profile) ---
+        const slices = 80;
+        const sliceH = totalH / slices;
 
-        ctx.fillStyle = tGrad;
-        ctx.beginPath();
-        ctx.moveTo(ex - topHalf, towerTop);
-        ctx.lineTo(ex + topHalf, towerTop);
-        ctx.lineTo(ex + botHalf, towerBot);
-        ctx.lineTo(ex - botHalf, towerBot);
-        ctx.closePath();
-        ctx.fill();
+        for (let i = 0; i < slices; i++) {
+            const t = i / slices;
+            const y = towerTop + t * totalH;
+            const w = profileW(t);
+            const nextW = profileW((i + 1) / slices);
 
-        // Tower crown / prongs around the eye
-        const prongH = 45;
-        const prongW = 5;
-        const prongPositions = [-22, -14, -7, 7, 14, 22];
-        ctx.fillStyle = '#0d0b09';
-        for (const px of prongPositions) {
+            // Horizontal gradient for 3D roundedness
+            const tGrad = ctx.createLinearGradient(ex - w, 0, ex + w, 0);
+            const base = Math.floor(10 + t * 6); // slightly lighter toward base
+            tGrad.addColorStop(0,   `rgb(${base - 6}, ${base - 7}, ${base - 8})`);
+            tGrad.addColorStop(0.25, `rgb(${base + 4}, ${base + 2}, ${base})`);
+            tGrad.addColorStop(0.45, `rgb(${base + 10}, ${base + 7}, ${base + 4})`);
+            tGrad.addColorStop(0.55, `rgb(${base + 10}, ${base + 7}, ${base + 4})`);
+            tGrad.addColorStop(0.75, `rgb(${base + 4}, ${base + 2}, ${base})`);
+            tGrad.addColorStop(1,   `rgb(${base - 6}, ${base - 7}, ${base - 8})`);
+
+            ctx.fillStyle = tGrad;
             ctx.beginPath();
-            ctx.moveTo(ex + px - prongW, towerTop);
-            ctx.lineTo(ex + px, towerTop - prongH - Math.abs(px) * 0.3);
-            ctx.lineTo(ex + px + prongW, towerTop);
+            ctx.moveTo(ex - w, y);
+            ctx.lineTo(ex + w, y);
+            ctx.lineTo(ex + nextW, y + sliceH + 0.5);
+            ctx.lineTo(ex - nextW, y + sliceH + 0.5);
             ctx.closePath();
             ctx.fill();
         }
 
-        // Central spire
-        ctx.fillStyle = '#0a0806';
-        ctx.beginPath();
-        ctx.moveTo(ex - 4, towerTop - prongH);
-        ctx.lineTo(ex, towerTop - prongH - 35);
-        ctx.lineTo(ex + 4, towerTop - prongH);
-        ctx.closePath();
-        ctx.fill();
+        // --- Setback ledges (protruding stone bands) ---
+        const setbacks = [0.06, 0.15, 0.18, 0.30, 0.33, 0.50, 0.53, 0.70, 0.73];
+        for (const sb of setbacks) {
+            const y = towerTop + sb * totalH;
+            const w = profileW(sb) + 4;
+            ctx.fillStyle = '#0e0c09';
+            ctx.fillRect(ex - w, y - 1.5, w * 2, 3);
+            // Slight highlight on top edge
+            ctx.fillStyle = 'rgba(35, 28, 18, 0.6)';
+            ctx.fillRect(ex - w, y - 1.5, w * 2, 1);
+        }
 
-        // Battlements / ledges
-        const ledgeYs = [0.35, 0.5, 0.65, 0.8];
-        for (const ly of ledgeYs) {
-            const ledgeY = towerTop + (towerBot - towerTop) * ly;
-            const ledgeHalfW = topHalf + (botHalf - topHalf) * ly;
-            ctx.strokeStyle = 'rgba(30, 25, 18, 0.6)';
+        // --- Buttresses / ribs running up the tower ---
+        ctx.strokeStyle = 'rgba(22, 18, 12, 0.5)';
+        ctx.lineWidth = 1.5;
+        for (let side = -1; side <= 1; side += 2) {
+            // Main rib
+            ctx.beginPath();
+            for (let i = 0; i <= slices; i++) {
+                const t = i / slices;
+                const y = towerTop + t * totalH;
+                const w = profileW(t) * 0.35;
+                const x = ex + side * w;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Outer rib
+            ctx.strokeStyle = 'rgba(18, 14, 10, 0.3)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(ex - ledgeHalfW - 3, ledgeY);
-            ctx.lineTo(ex + ledgeHalfW + 3, ledgeY);
+            for (let i = 0; i <= slices; i++) {
+                const t = i / slices;
+                const y = towerTop + t * totalH;
+                const w = profileW(t) * 0.7;
+                const x = ex + side * w;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
             ctx.stroke();
-            // Small notches
-            ctx.fillStyle = '#0d0b09';
-            for (let n = -2; n <= 2; n++) {
-                ctx.fillRect(ex + n * (ledgeHalfW * 0.4) - 2, ledgeY - 5, 4, 5);
+        }
+
+        // --- Two main prongs that hold the eye ---
+        // Rise from tower top, flare outward, tips end at the sides of the eye
+        for (let side = -1; side <= 1; side += 2) {
+            const baseInnerX = ex + side * 10;
+            const baseOuterX = ex + side * 20;
+            const baseY = towerTop;
+
+            // Tips end at the eye's sides (eyeW = 70 in drawEye)
+            const tipX = ex + side * 78;
+            const tipY = ey;  // right at eye level
+
+            // Prong gradient
+            const pGrad = ctx.createLinearGradient(
+                ex, baseY, ex + side * 80, ey
+            );
+            pGrad.addColorStop(0, '#0e0c08');
+            pGrad.addColorStop(0.3, '#161310');
+            pGrad.addColorStop(0.6, '#100e0a');
+            pGrad.addColorStop(1, '#080604');
+
+            // Outer edge curves outward from base to tip at eye side
+            // Inner edge is a tighter curve from base to tip
+            ctx.fillStyle = pGrad;
+            ctx.beginPath();
+            // Outer edge — sweeps wide, arrives at eye side
+            ctx.moveTo(baseOuterX, baseY);
+            ctx.bezierCurveTo(
+                ex + side * 40, baseY - 10,     // starts curving out
+                ex + side * 75, ey + 40,         // wide arc below eye
+                tipX + side * 4, tipY + 4        // tip outer (just past eye edge)
+            );
+            // Pointed tip at the eye's side
+            ctx.lineTo(tipX, tipY - 2);
+            // Inner edge — tighter curve back to base
+            ctx.bezierCurveTo(
+                ex + side * 60, ey + 30,         // inner arc below eye
+                ex + side * 25, baseY - 5,
+                baseInnerX, baseY
+            );
+            ctx.closePath();
+            ctx.fill();
+
+            // Highlight on inner face
+            ctx.strokeStyle = 'rgba(50, 38, 22, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(baseInnerX + side * 2, baseY);
+            ctx.bezierCurveTo(
+                ex + side * 27, baseY - 4,
+                ex + side * 62, ey + 28,
+                tipX, tipY - 1
+            );
+            ctx.stroke();
+
+            // Dark edge on outer face
+            ctx.strokeStyle = 'rgba(3, 2, 0, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(baseOuterX, baseY);
+            ctx.bezierCurveTo(
+                ex + side * 40, baseY - 10,
+                ex + side * 75, ey + 40,
+                tipX + side * 4, tipY + 4
+            );
+            ctx.stroke();
+
+            // Faint fire glow on inner face (lit by the eye)
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const glowGrad = ctx.createRadialGradient(ex, ey, 10, ex, ey, 80);
+            glowGrad.addColorStop(0, 'rgba(255, 80, 0, 0.04)');
+            glowGrad.addColorStop(0.5, 'rgba(200, 50, 0, 0.02)');
+            glowGrad.addColorStop(1, 'rgba(100, 20, 0, 0)');
+            ctx.fillStyle = glowGrad;
+            ctx.beginPath();
+            ctx.moveTo(baseInnerX, baseY);
+            ctx.bezierCurveTo(
+                ex + side * 27, baseY - 4,
+                ex + side * 62, ey + 28,
+                tipX, tipY - 1
+            );
+            ctx.bezierCurveTo(
+                ex + side * 65, ey + 30,
+                ex + side * 30, baseY - 3,
+                baseInnerX + side * 5, baseY
+            );
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // --- Secondary shorter prong ---
+            ctx.fillStyle = '#0b0906';
+            ctx.beginPath();
+            ctx.moveTo(ex + side * 6, baseY);
+            ctx.bezierCurveTo(
+                ex + side * 20, baseY - 5,
+                ex + side * 48, ey + 30,
+                ex + side * 58, ey + 8
+            );
+            ctx.lineTo(ex + side * 54, ey + 6);
+            ctx.bezierCurveTo(
+                ex + side * 42, ey + 26,
+                ex + side * 16, baseY - 3,
+                ex + side * 2, baseY
+            );
+            ctx.closePath();
+            ctx.fill();
+
+            // --- Jagged teeth along the crown rim ---
+            const teeth = [
+                { bx: 4, tipOff: 6, h: 14 },
+                { bx: 10, tipOff: 13, h: 20 },
+                { bx: 18, tipOff: 22, h: 11 },
+                { bx: 26, tipOff: 30, h: 16 },
+            ];
+            ctx.fillStyle = '#0a0806';
+            for (const tooth of teeth) {
+                const tbx = ex + side * tooth.bx;
+                const ttx = ex + side * tooth.tipOff;
+                ctx.beginPath();
+                ctx.moveTo(tbx - side * 2.5, towerTop);
+                ctx.lineTo(ttx, towerTop - tooth.h);
+                ctx.lineTo(tbx + side * 2.5, towerTop);
+                ctx.closePath();
+                ctx.fill();
             }
         }
 
-        // Window slits with faint fire glow
-        ctx.fillStyle = 'rgba(40, 15, 0, 0.5)';
-        const windowYs = [0.25, 0.4, 0.55, 0.7, 0.85];
-        for (const wy of windowYs) {
-            const wy2 = towerTop + (towerBot - towerTop) * wy;
-            const wHalfW = topHalf + (botHalf - topHalf) * wy;
-            ctx.fillRect(ex - wHalfW * 0.3, wy2, 2.5, 7);
-            ctx.fillRect(ex + wHalfW * 0.25, wy2 + 10, 2.5, 7);
+        // --- Central spire (short, just above crown) ---
+        ctx.fillStyle = '#0a0806';
+        ctx.beginPath();
+        ctx.moveTo(ex - 3, towerTop - 5);
+        ctx.lineTo(ex, towerTop - 35);
+        ctx.lineTo(ex + 3, towerTop - 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Flanking spires
+        for (let side = -1; side <= 1; side += 2) {
+            ctx.fillStyle = '#080604';
+            ctx.beginPath();
+            ctx.moveTo(ex + side * 5 - 1.5, towerTop - 2);
+            ctx.lineTo(ex + side * 7, towerTop - 24);
+            ctx.lineTo(ex + side * 5 + 1.5, towerTop - 2);
+            ctx.closePath();
+            ctx.fill();
         }
 
-        // Vertical edge lines for depth
-        ctx.strokeStyle = 'rgba(20, 16, 10, 0.3)';
-        ctx.lineWidth = 0.5;
-        for (let i = -1; i <= 1; i += 2) {
+        // --- Spikes along the tower body ---
+        const bodySpikes = [
+            { t: 0.10, side:  1, h: 18, w: 4 },
+            { t: 0.14, side: -1, h: 14, w: 3 },
+            { t: 0.22, side:  1, h: 12, w: 3 },
+            { t: 0.27, side: -1, h: 16, w: 4 },
+            { t: 0.36, side:  1, h: 20, w: 5 },
+            { t: 0.42, side: -1, h: 13, w: 3 },
+            { t: 0.48, side:  1, h: 15, w: 4 },
+            { t: 0.58, side: -1, h: 18, w: 4 },
+            { t: 0.64, side:  1, h: 12, w: 3 },
+            { t: 0.72, side: -1, h: 16, w: 4 },
+            { t: 0.78, side:  1, h: 22, w: 5 },
+            { t: 0.85, side: -1, h: 14, w: 3 },
+        ];
+        ctx.fillStyle = '#0c0a07';
+        for (const sp of bodySpikes) {
+            const sy = towerTop + sp.t * totalH;
+            const sw = profileW(sp.t);
+            const sBaseX = ex + sp.side * sw;
             ctx.beginPath();
-            ctx.moveTo(ex + i * topHalf * 0.2, towerTop);
-            ctx.lineTo(ex + i * botHalf * 0.2, towerBot);
+            ctx.moveTo(sBaseX, sy + sp.w);
+            ctx.lineTo(sBaseX + sp.side * sp.h, sy - 2);
+            ctx.lineTo(sBaseX, sy - sp.w);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // --- Flying buttresses at lower section ---
+        for (let side = -1; side <= 1; side += 2) {
+            for (let b = 0; b < 3; b++) {
+                const t = 0.55 + b * 0.12;
+                const y = towerTop + t * totalH;
+                const w = profileW(t);
+                const buttEndX = ex + side * (w + 15 + b * 8);
+                const buttEndY = y + 30 + b * 15;
+
+                ctx.fillStyle = '#0c0a07';
+                ctx.beginPath();
+                ctx.moveTo(ex + side * w, y);
+                ctx.quadraticCurveTo(
+                    ex + side * (w + 8 + b * 4), y + 5,
+                    buttEndX, buttEndY
+                );
+                ctx.lineTo(buttEndX - side * 3, buttEndY + 4);
+                ctx.quadraticCurveTo(
+                    ex + side * (w + 5 + b * 3), y + 10,
+                    ex + side * w, y + 6
+                );
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // --- Stone block texture (subtle horizontal lines) ---
+        ctx.strokeStyle = 'rgba(25, 20, 14, 0.25)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < slices; i += 2) {
+            const t = i / slices;
+            const y = towerTop + t * totalH;
+            const w = profileW(t);
+            ctx.beginPath();
+            ctx.moveTo(ex - w, y);
+            ctx.lineTo(ex + w, y);
             ctx.stroke();
         }
+
+        // --- Window slits with faint fire glow ---
+        const windowTiers = [0.20, 0.28, 0.38, 0.45, 0.56, 0.63, 0.75, 0.82];
+        for (let i = 0; i < windowTiers.length; i++) {
+            const t = windowTiers[i];
+            const y = towerTop + t * totalH;
+            const w = profileW(t);
+            // Fire glow behind slit
+            ctx.fillStyle = 'rgba(180, 60, 0, 0.15)';
+            ctx.fillRect(ex - w * 0.2 - 2, y - 1, 5, 10);
+            ctx.fillRect(ex + w * 0.15 - 1, y + 8, 5, 10);
+            // Dark slit
+            ctx.fillStyle = 'rgba(5, 3, 0, 0.8)';
+            ctx.fillRect(ex - w * 0.2, y, 2, 8);
+            ctx.fillRect(ex + w * 0.15, y + 9, 2, 8);
+        }
+
+        // --- Faint ember glow at tower base ---
+        const baseGlow = ctx.createRadialGradient(ex, towerBot - 60, 10, ex, towerBot - 60, profileW(1) * 1.5);
+        baseGlow.addColorStop(0, 'rgba(120, 30, 0, 0.06)');
+        baseGlow.addColorStop(1, 'rgba(60, 10, 0, 0)');
+        ctx.fillStyle = baseGlow;
+        ctx.beginPath();
+        ctx.ellipse(ex, towerBot - 60, profileW(1) * 1.5, 80, 0, 0, Math.PI * 2);
+        ctx.fill();
 
         ctx.restore();
     }
