@@ -336,6 +336,110 @@ h2 {
     transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* ---- Experience — Tales from the Road ---- */
+
+.experience-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.experience {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    padding: 1.5rem;
+    padding-left: 1.75rem;
+    background-color: #eae4d6;
+    border-left: 2px solid #c4b896;
+    margin-bottom: 2px;
+    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.experience:hover {
+    border-left-color: #c9a84c;
+    box-shadow: 0 0 20px rgba(201, 168, 76, 0.12), 0 0 4px rgba(201, 168, 76, 0.08);
+    background-color: #ede8db;
+}
+
+.exp-logo {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.exp-logo img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+/* Logo theme swap */
+.exp-logo .logo-dark { display: none; }
+body.dark .exp-logo .logo-light { display: none; }
+body.dark .exp-logo .logo-dark { display: block; }
+
+.exp-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.exp-info h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    letter-spacing: 0.3px;
+    color: #2c2416;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.exp-company {
+    color: #5a4e41;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.exp-meta {
+    color: #7a6e5a;
+    font-size: 0.82rem;
+    font-style: italic;
+    line-height: 1.5;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.exp-desc {
+    color: #5a4e41;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    margin-top: 0.5rem;
+    margin-bottom: 0.6rem;
+    transition: color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+body.dark .experience {
+    background-color: #171311;
+    border-left-color: #3a3228;
+}
+
+body.dark .experience:hover {
+    border-left-color: #c9a84c;
+    box-shadow: 0 0 24px rgba(201, 168, 76, 0.1), 0 0 6px rgba(201, 168, 76, 0.06);
+    background-color: #1f1b17;
+}
+
+body.dark .exp-info h3 { color: #d4c9b5; }
+body.dark .exp-company { color: #b0a692; }
+body.dark .exp-meta { color: #7a7268; }
+body.dark .exp-desc { color: #8a8278; }
+
 /* ---- Project Cards — Map Fragments ---- */
 
 .project-grid {
@@ -662,6 +766,17 @@ body.dark footer a:hover {
 
     .divider {
         max-width: 280px;
+    }
+
+    .experience {
+        gap: 1rem;
+        padding: 1.25rem;
+        padding-left: 1.5rem;
+    }
+
+    .exp-logo {
+        width: 44px;
+        height: 44px;
     }
 }
 
