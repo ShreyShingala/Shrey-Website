@@ -1331,14 +1331,14 @@ themeToggle?.addEventListener('click', () => {
 
     // ----- Scene with exponential fog -----
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0xc8d0dc, 0.12);
+    scene.fog = new THREE.FogExp2(0xc8d0dc, 0.085);
 
     // ----- Camera — Gandalf left foreground, mountains cascade right, tower far right -----
-    const DEFAULT_FOV = 34;
+    const DEFAULT_FOV = 50;
     const ZOOM_FOV = 75;
     const camera = new THREE.PerspectiveCamera(DEFAULT_FOV, canvasW() / canvasH(), 0.01, 80);
-    const defaultCameraPos = new THREE.Vector3(-0.5, 0.6, 5);
-    const defaultCameraTarget = new THREE.Vector3(1.5, 0.3, -5);
+    const defaultCameraPos = new THREE.Vector3(0, 0.9, 5.5);
+    const defaultCameraTarget = new THREE.Vector3(0.8, 0.3, -6);
     camera.position.copy(defaultCameraPos);
     camera.lookAt(defaultCameraTarget);
 
@@ -1346,7 +1346,7 @@ themeToggle?.addEventListener('click', () => {
     const dirLight = new THREE.DirectionalLight(0xfff0d4, 1.0);
     dirLight.position.set(-5, 8, 3);
     scene.add(dirLight);
-    scene.add(new THREE.AmbientLight(0xd0d4dc, 0.6));
+    scene.add(new THREE.AmbientLight(0xd0d4dc, 0.7));
 
     // ----- Sky (large PlaneGeometry with GLSL ShaderMaterial) -----
     const skyMat = new THREE.ShaderMaterial({
@@ -1396,41 +1396,79 @@ themeToggle?.addEventListener('click', () => {
              + Math.sin(x * 11.7 + seed * 0.3) * 0.12;
     }
 
-    // ----- Mountains — 3 layered ranges (reduced from 5 to avoid clutter) -----
-    // Only 3 visible layers + foreground ground plane
-    const SEGMENTS = 120;
+    // Soft rolling profile — fewer, gentler peaks so layers don't compete visually
+    function ridgedNoise(x, seed) {
+        const base = seededNoise(x, seed);
+        const ridge = (1 - Math.abs(Math.sin(x * 1.6 + seed * 2.1))) * 0.35;
+        return base * 0.85 + ridge;
+    }
+
+    // ----- Mountains — 3 calm layered ranges, far ones snow-capped -----
+    const SEGMENTS = 160;
+    const HEIGHT_SEG = 10;
     const layerSpecs = [
-        { z: -12,  color: '#dde4ec', opacity: 0.5,  seed: 11, y: -0.8, peakScale: 2.5, w: 40 }, // Far — mostly fog
-        { z: -8,   color: '#a8b8c8', opacity: 0.7,  seed: 23, y: -0.4, peakScale: 3.0, w: 35 }, // Mid — Barad-dûr here
-        { z: -4,   color: '#6a7d90', opacity: 0.92, seed: 37, y: -0.2, peakScale: 2.2, w: 30 }, // Near — Gandalf stands here
+        { z: -20, color: '#cdd6e2', snow: true,  snowAmt: 0.95, opacity: 0.5,  seed: 11, y: -0.5, peakScale: 3.6, w: 60, freq: 3.2 }, // Far snow peaks
+        { z: -12, color: '#9badc2', snow: true,  snowAmt: 0.6,  opacity: 0.7,  seed: 23, y: -0.5, peakScale: 2.4, w: 44, freq: 2.6 }, // Mid — tower silhouette lives here
+        { z: -6,  color: '#6e7e92', snow: false, snowAmt: 0,    opacity: 0.95, seed: 37, y: -0.6, peakScale: 1.6, w: 32, freq: 2.0 }, // Near — Gandalf stands here
     ];
 
-    // Storage for Layer 2 (index 2, z:-4) heights for Gandalf placement
+    // Storage for Layer index 2 heights for Gandalf placement
     let gandalfLayerHeights = [];
 
     const mountainMeshes = layerSpecs.map((spec, layerIdx) => {
-        const geo = new THREE.PlaneGeometry(spec.w, 6, SEGMENTS, 1);
+        const geo = new THREE.PlaneGeometry(spec.w, 5, SEGMENTS, HEIGHT_SEG);
         const pos = geo.attributes.position;
+        const colors = new Float32Array(pos.count * 3);
         const topYs = [];
 
+        const baseColor = new THREE.Color(spec.color);
+        const snowColor = new THREE.Color('#f5f8fc');
+
+        // Precompute peak height per unique x
+        const peakAt = new Map();
+        const peakOf = (x) => {
+            if (peakAt.has(x)) return peakAt.get(x);
+            const nx = (x + spec.w / 2) / spec.w;
+            const h = ridgedNoise(nx * spec.freq, spec.seed) * spec.peakScale;
+            peakAt.set(x, h);
+            return h;
+        };
+
+        const BOTTOM = -3.5;
         for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
             const y = pos.getY(i);
+            const peak = peakOf(x);
 
-            if (y > 0) {
-                const nx = (x + spec.w / 2) / spec.w;
-                const n = seededNoise(nx * 6, spec.seed);
-                const displaced = y * 0.05 + n * spec.peakScale;
-                pos.setY(i, displaced);
-                topYs.push({ x, y: displaced });
-            } else {
-                pos.setY(i, y - 3.0);
+            // Map y from [-2.5, 2.5] linearly so top edge becomes the peak, bottom drops well below view
+            const t = (y + 2.5) / 5; // 0 at bottom, 1 at top
+            const newY = BOTTOM + t * (peak - BOTTOM);
+            pos.setY(i, newY);
+
+            // Vertex color — snow caps on tall peaks of snowy layers
+            let r = baseColor.r, g = baseColor.g, b = baseColor.b;
+            if (spec.snow && peak > 1.2) {
+                // snow line at ~60% of this peak's height; smoother blend
+                const snowLine = 0.55 + 0.1 * Math.sin(x * 1.7 + spec.seed);
+                const s = Math.max(0, Math.min(1, (t - snowLine) / 0.18));
+                const blend = s * spec.snowAmt * Math.min(1, (peak - 1.2) / 0.6);
+                r = baseColor.r + (snowColor.r - baseColor.r) * blend;
+                g = baseColor.g + (snowColor.g - baseColor.g) * blend;
+                b = baseColor.b + (snowColor.b - baseColor.b) * blend;
+            }
+            colors[i * 3]     = r;
+            colors[i * 3 + 1] = g;
+            colors[i * 3 + 2] = b;
+
+            if (Math.abs(t - 1) < 0.001) {
+                topYs.push({ x, y: newY });
             }
         }
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geo.computeVertexNormals();
 
         const mat = new THREE.MeshLambertMaterial({
-            color: new THREE.Color(spec.color),
+            vertexColors: true,
             transparent: true,
             opacity: spec.opacity,
         });
@@ -1443,13 +1481,6 @@ themeToggle?.addEventListener('click', () => {
         }
         return mesh;
     });
-
-    // Foreground ground plane — solid dark, covers bottom
-    const groundGeo = new THREE.PlaneGeometry(40, 4, 1, 1);
-    const groundMat = new THREE.MeshLambertMaterial({ color: new THREE.Color('#4a5a68'), opacity: 1.0 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.position.set(0, -2.5, -1);
-    scene.add(ground);
 
     // ----- Terrain height lookup -----
     function getHeightAt(worldX) {
@@ -1492,14 +1523,16 @@ themeToggle?.addEventListener('click', () => {
 
     const mistTex = makeMistTexture();
     const mistBands = [
-        { z: -10, y: 0.0,  opacity: 0.3 },
-        { z: -6,  y: -0.1, opacity: 0.25 },
+        { z: -15, y: 0.4,  w: 40, h: 2.2, opacity: 0.45 }, // far — softens snow peaks
+        { z: -10, y: 0.0,  w: 32, h: 2.0, opacity: 0.4  }, // around tower base
+        { z: -6,  y: -0.1, w: 26, h: 1.8, opacity: 0.32 }, // between tower and Gandalf
+        { z: -2,  y: -0.3, w: 20, h: 1.4, opacity: 0.22 }, // foreground breath
     ];
     for (const m of mistBands) {
         const mat = new THREE.MeshBasicMaterial({
             map: mistTex, transparent: true, opacity: m.opacity, depthWrite: false,
         });
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(25, 2), mat);
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(m.w, m.h), mat);
         plane.position.set(0, m.y, m.z);
         scene.add(plane);
     }
@@ -1547,43 +1580,53 @@ themeToggle?.addEventListener('click', () => {
         scene.add(plane);
     }
 
-    // ----- Barad-dûr — FAR RIGHT, between Layer 2 peaks -----
-    const baraddurPos = { x: 5.5, y: 0.4, z: -9 };
+    // ----- Barad-dûr — FAR RIGHT, tall silhouette tower above the mid mountain layer -----
+    const baraddurPos = { x: 7.5, y: 0.2, z: -11 };
+    const baraddurScale = 0.55;
     const baraddur = new THREE.Group();
-    const towerColor = 0x5a4a5a;
-    const towerOpacity = 0.45;
-    const baseMat = new THREE.MeshLambertMaterial({ color: towerColor, transparent: true, opacity: towerOpacity });
+    const towerColor = 0x4a5260;
+    const towerOpacity = 0.55;
+    const baseMat = new THREE.MeshLambertMaterial({
+        color: towerColor, transparent: true, opacity: towerOpacity,
+    });
 
-    const tBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.12), baseMat);
-    tBase.position.y = 0.125;
+    // Stacked silhouette — wide tapered base, slender mid, narrow upper, spire, crown of prongs
+    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 0.85, 8), baseMat);
+    tBase.position.y = 0.425;
     baraddur.add(tBase);
-    const tMid = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), baseMat.clone());
-    tMid.position.y = 0.4;
+    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, 0.95, 8), baseMat.clone());
+    tMid.position.y = 1.32;
     baraddur.add(tMid);
-    const tUpper = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.05), baseMat.clone());
-    tUpper.position.y = 0.65;
+    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.7, 8), baseMat.clone());
+    tUpper.position.y = 2.14;
     baraddur.add(tUpper);
-    const tSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.025, 0.15, 8), baseMat.clone());
-    tSpire.position.y = 0.825;
-    baraddur.add(tSpire);
-    const tCrown = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12), baseMat.clone());
-    tCrown.position.y = 0.87;
-    tCrown.rotation.x = Math.PI / 2;
-    baraddur.add(tCrown);
+    const tCrownBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 8), baseMat.clone());
+    tCrownBase.position.y = 2.55;
+    baraddur.add(tCrownBase);
 
-    // Ember glow at top
-    const emberLight = new THREE.PointLight(0xff3300, 1.5, 3);
-    emberLight.position.y = 0.9;
-    baraddur.add(emberLight);
+    // Crown prongs — 4 jagged spikes around the top
+    const prongMat = baseMat.clone();
+    const prongCount = 4;
+    for (let i = 0; i < prongCount; i++) {
+        const a = (i / prongCount) * Math.PI * 2 + 0.4;
+        const prong = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.32, 4), prongMat);
+        prong.position.set(Math.cos(a) * 0.13, 2.77, Math.sin(a) * 0.13);
+        baraddur.add(prong);
+    }
+
+    // Central spire — the iconic single needle
+    const tSpire = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.55, 6), baseMat.clone());
+    tSpire.position.y = 2.95;
+    baraddur.add(tSpire);
 
     baraddur.position.set(baraddurPos.x, baraddurPos.y, baraddurPos.z);
+    baraddur.scale.setScalar(baraddurScale);
     scene.add(baraddur);
 
-    // ----- Gandalf billboard — left side, LARGE, standing ON a mountain ridge -----
+    // ----- Gandalf billboard — left foreground, standing on a near ridge -----
     const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
-    // PNG is ~500x600 (aspect ~0.83:1). Make him prominent.
-    const gandalfW = 0.9;
-    const gandalfH = 1.2;
+    const gandalfW = 1.1;
+    const gandalfH = 1.45;
     const gandalfGeo = new THREE.PlaneGeometry(gandalfW, gandalfH);
     const gandalfMat = new THREE.MeshBasicMaterial({
         map: gandalfTexture,
@@ -1594,18 +1637,15 @@ themeToggle?.addEventListener('click', () => {
     });
     const gandalf = new THREE.Mesh(gandalfGeo, gandalfMat);
 
-    // Place Gandalf on the near mountain layer (index 2, z:-4)
-    // His x position in local mountain coords
-    const gandalfX = -3.5;
-    const terrainY = getHeightAt(gandalfX);
-    // Layer 2 mesh world y = layerSpecs[2].y = -0.3
-    // World surface = mesh.y + terrainY
-    // Billboard base (bottom edge) should sit on surface, so center = surface + half height
-    const gandalfWorldY = layerSpecs[2].y + terrainY + gandalfH * 0.45;
+    // Stand him on a near ridge, well to the left of the camera target.
+    // z in FRONT of every mountain layer (closest mountain is z=-6) so he's never occluded.
+    const gandalfX = -2.0;
+    const gandalfZ = -2.5;
+    // Plant his feet near the horizon line — camera lookAt y is 0.3, his center sits just below.
+    const gandalfWorldY = 0.2;
     const gandalfBaseY = gandalfWorldY;
-    // Place at same z as the mountain layer so he's clearly ON it
-    gandalf.position.set(gandalfX, gandalfWorldY, -3.9);
-    gandalf.rotation.y = 0.12;
+    gandalf.position.set(gandalfX, gandalfWorldY, gandalfZ);
+    gandalf.rotation.y = 0.0; // back of cloak to camera, looking right toward the tower
     scene.add(gandalf);
 
     // ----- Clock -----
