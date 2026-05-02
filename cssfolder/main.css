@@ -6,6 +6,7 @@
 
 html {
     scroll-behavior: smooth;
+    overscroll-behavior: none;
 }
 
 /* ============================================
@@ -19,6 +20,7 @@ body {
     color: #2c2416;
     line-height: 1.6;
     position: relative;
+    overscroll-behavior: none;
     transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -78,6 +80,190 @@ body.dark #sauron-canvas {
     opacity: 1;
 }
 
+/* ---- Misty Mountains — light mode WebGL canvas (additive Three.js scene) ----
+   Lives inside .hero and fills it. Scrolls away with the hero so we don't
+   need any curtain or fog hacks to hide it on the rest of the page. */
+
+#lightModeCanvas {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    display: none;
+    will-change: transform;
+}
+
+/* Show light canvas only when light-mode is active */
+body.light-mode #lightModeCanvas {
+    display: block;
+}
+
+/* Hero content + fog must sit above the canvas */
+body.light-mode .hero > h1,
+body.light-mode .hero > .subtitle,
+body.light-mode .hero > .links,
+body.light-mode .hero > .divider {
+    position: relative;
+    z-index: 3;
+}
+
+/* Fog overlay (warm ember burn used by the toggle transition) */
+#fogOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(ellipse at 82% 18%, #c8a882 0%, #1a1008 55%, #000000 100%);
+}
+
+/* Light-mode page theming (additive — applies in addition to default styling) */
+body.light-mode {
+    background: #f0ebe0;
+    color: #2c1f0e;
+    overflow-x: hidden;
+}
+
+/* ---- Light-mode scroll curtain ---- */
+body.light-mode .hero {
+    position: relative;
+    background: transparent;
+    overflow: visible;
+    padding-top: 12vh;
+    padding-bottom: 4vh;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+/* Cloud band — soft grey puffs orbiting in slow circles so it reads
+   like real fog you're descending into, then settling into parchment
+   at the seam (the next "section" emerging below). */
+body.light-mode .hero::before {
+    content: '';
+    position: absolute;
+    bottom: -1rem;
+    left: -50vw;
+    right: -50vw;
+    height: 8rem;
+    pointer-events: none;
+    z-index: 1;
+    background:
+        radial-gradient(ellipse 30% 60% at 50% 50%, rgba(195, 200, 215, 0.95) 0%, rgba(195, 200, 215, 0.5) 40%, transparent 80%),
+        radial-gradient(ellipse 35% 70% at 50% 50%, rgba(208, 212, 222, 0.95) 0%, rgba(208, 212, 222, 0.55) 38%, transparent 78%),
+        radial-gradient(ellipse 28% 65% at 50% 50%, rgba(188, 195, 210, 0.92) 0%, rgba(188, 195, 210, 0.5) 40%, transparent 80%),
+        radial-gradient(ellipse 32% 70% at 50% 50%, rgba(200, 205, 218, 0.95) 0%, rgba(200, 205, 218, 0.55) 40%, transparent 78%);
+    background-size: 220% 240%, 250% 220%, 200% 260%, 240% 220%;
+    background-repeat: no-repeat;
+    animation: cloudSwirl 22s linear infinite;
+    will-change: background-position;
+}
+
+body.light-mode .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -1rem;
+    left: -50vw;
+    right: -50vw;
+    height: 7rem;
+    pointer-events: none;
+    z-index: 2;
+    background: linear-gradient(to bottom,
+        transparent 0%,
+        rgba(210, 215, 222, 0.08) 20%,
+        rgba(222, 220, 218, 0.22) 38%,
+        rgba(232, 226, 218, 0.5) 55%,
+        rgba(240, 235, 224, 0.82) 72%,
+        rgba(240, 235, 224, 0.97) 86%,
+        #f0ebe0 93%,
+        #f0ebe0 100%);
+}
+
+/* Each puff orbits its own center on screen at a different phase,
+   giving the band a churning-cloud feel rather than a horizontal drift. */
+@keyframes cloudSwirl {
+    0% {
+        background-position:
+            25% 35%,
+            70% 50%,
+            75% 65%,
+            27% 50%;
+    }
+    25% {
+        background-position:
+            40% 50%,
+            50% 70%,
+            63% 50%,
+            45% 32%;
+    }
+    50% {
+        background-position:
+            25% 65%,
+            30% 50%,
+            75% 35%,
+            63% 50%;
+    }
+    75% {
+        background-position:
+            10% 50%,
+            50% 30%,
+            87% 50%,
+            45% 68%;
+    }
+    100% {
+        background-position:
+            25% 35%,
+            70% 50%,
+            75% 65%,
+            27% 50%;
+    }
+}
+
+/* Wrapper for everything after the hero */
+body.light-mode #content-curtain {
+    position: relative;
+    z-index: 2;
+    background-color: #f0ebe0;
+}
+
+/* Full-bleed parchment behind the curtain so the canvas
+   doesn't leak through on the sides of the 720px column.
+   Stays within curtain bounds so it doesn't cover the footer. */
+body.light-mode #content-curtain::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -50vw;
+    right: -50vw;
+    background-color: #f0ebe0;
+    z-index: -1;
+}
+
+body.light-mode footer {
+    background-color: #f0ebe0;
+    position: relative;
+    z-index: 102;
+}
+
+body.light-mode .project,
+body.light-mode .experience {
+    background-color: rgba(0, 0, 0, 0.04);
+    border-left-color: rgba(0, 0, 0, 0.1);
+}
+body.light-mode .tech,
+body.light-mode .links a {
+    border-color: rgba(0, 0, 0, 0.12);
+}
+body.light-mode .nav-links a {
+    color: #2c1f0e;
+}
+
 /* Fire flicker animations */
 .fire-flicker-1 {
     animation: flicker1 2.5s ease-in-out infinite;
@@ -106,12 +292,11 @@ nav {
     justify-content: space-between;
     align-items: center;
     padding: 1.25rem 2rem;
-    position: sticky;
-    top: 0;
+    position: relative;
     background: rgba(245, 240, 232, 0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    z-index: 10;
+    z-index: 103;
     border-bottom: 1px solid #d4c9b5;
     transition: background 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -240,6 +425,8 @@ main {
     max-width: 720px;
     margin: 0 auto;
     padding: 0 1.5rem;
+    position: relative;
+    z-index: 101;
 }
 
 /* ---- Hero — The Inscription ---- */
@@ -513,6 +700,8 @@ body.dark .exp-desc { color: #8a8278; }
 footer {
     text-align: center;
     padding: 3rem 1.5rem;
+    position: relative;
+    z-index: 102;
 }
 
 .footer-quote {
@@ -781,7 +970,8 @@ body.dark footer a:hover {
 }
 
 @media (max-width: 420px) {
-    #sauron-canvas {
+    #sauron-canvas,
+    #lightModeCanvas {
         display: none;
     }
 }

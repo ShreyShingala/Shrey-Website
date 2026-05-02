@@ -1297,3 +1297,449 @@ themeToggle?.addEventListener('click', () => {
 
     requestAnimationFrame(render);
 })();
+
+// ============================================================================
+// LIGHT MODE SCENE — additive only. Own canvas, renderer, scene, loop.
+// Never references or mutates the dark mode (Sauron) state above.
+// ============================================================================
+(function initLightModeScene() {
+    if (typeof THREE === 'undefined') {
+        console.warn('[lightScene] THREE.js not loaded — skipping');
+        return;
+    }
+    const canvas = document.getElementById('lightModeCanvas');
+    const fogOverlay = document.getElementById('fogOverlay');
+    if (!canvas) return;
+
+    // ----- State -----
+    let isTransitioningLight = false;
+    let isLightMode = !document.body.classList.contains('dark');
+
+    // Sync light-mode class with current state on init
+    if (isLightMode) {
+        document.body.classList.add('light-mode');
+    }
+
+    // ----- Renderer -----
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Canvas lives inside .hero — size to the canvas element, not the window.
+    const canvasW = () => canvas.clientWidth || window.innerWidth;
+    const canvasH = () => canvas.clientHeight || window.innerHeight;
+    renderer.setSize(canvasW(), canvasH(), false);
+    renderer.setClearColor(0xc8d0dc, 1);
+
+    // ----- Scene with exponential fog -----
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0xc8d0dc, 0.12);
+
+    // ----- Camera — Gandalf left foreground, mountains cascade right, tower far right -----
+    const DEFAULT_FOV = 34;
+    const ZOOM_FOV = 75;
+    const camera = new THREE.PerspectiveCamera(DEFAULT_FOV, canvasW() / canvasH(), 0.01, 80);
+    const defaultCameraPos = new THREE.Vector3(-0.5, 0.6, 5);
+    const defaultCameraTarget = new THREE.Vector3(1.5, 0.3, -5);
+    camera.position.copy(defaultCameraPos);
+    camera.lookAt(defaultCameraTarget);
+
+    // ----- Lights -----
+    const dirLight = new THREE.DirectionalLight(0xfff0d4, 1.0);
+    dirLight.position.set(-5, 8, 3);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xd0d4dc, 0.6));
+
+    // ----- Sky (large PlaneGeometry with GLSL ShaderMaterial) -----
+    const skyMat = new THREE.ShaderMaterial({
+        uniforms: {},
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            varying vec2 vUv;
+            void main() {
+                float y = vUv.y;
+                float x = vUv.x;
+                vec3 peachGold = vec3(0.941, 0.788, 0.541);
+                vec3 rosePink  = vec3(0.831, 0.627, 0.627);
+                vec3 lavender  = vec3(0.627, 0.682, 0.753);
+                vec3 steelBlue = vec3(0.416, 0.498, 0.604);
+                vec3 c;
+                if (y < 0.15) {
+                    c = mix(peachGold, rosePink, y / 0.15);
+                } else if (y < 0.45) {
+                    c = mix(rosePink, lavender, (y - 0.15) / 0.30);
+                } else {
+                    c = mix(lavender, steelBlue, (y - 0.45) / 0.55);
+                }
+                // Right side warmer/brighter (dawn glow)
+                float warmBias = smoothstep(0.3, 1.0, x) * 0.1;
+                c += vec3(warmBias * 1.4, warmBias * 0.8, warmBias * 0.2);
+                gl_FragColor = vec4(c, 1.0);
+            }
+        `,
+        side: THREE.FrontSide,
+        depthWrite: false,
+        fog: false,
+    });
+    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(60, 35), skyMat);
+    skyPlane.position.set(0, 5, -20);
+    scene.add(skyPlane);
+
+    // ----- Inline seeded noise -----
+    function seededNoise(x, seed) {
+        return Math.sin(x * 2.3 + seed) * 0.5
+             + Math.sin(x * 5.1 + seed * 1.7) * 0.25
+             + Math.sin(x * 11.7 + seed * 0.3) * 0.12;
+    }
+
+    // ----- Mountains — 3 layered ranges (reduced from 5 to avoid clutter) -----
+    // Only 3 visible layers + foreground ground plane
+    const SEGMENTS = 120;
+    const layerSpecs = [
+        { z: -12,  color: '#dde4ec', opacity: 0.5,  seed: 11, y: -0.8, peakScale: 2.5, w: 40 }, // Far — mostly fog
+        { z: -8,   color: '#a8b8c8', opacity: 0.7,  seed: 23, y: -0.4, peakScale: 3.0, w: 35 }, // Mid — Barad-dûr here
+        { z: -4,   color: '#6a7d90', opacity: 0.92, seed: 37, y: -0.2, peakScale: 2.2, w: 30 }, // Near — Gandalf stands here
+    ];
+
+    // Storage for Layer 2 (index 2, z:-4) heights for Gandalf placement
+    let gandalfLayerHeights = [];
+
+    const mountainMeshes = layerSpecs.map((spec, layerIdx) => {
+        const geo = new THREE.PlaneGeometry(spec.w, 6, SEGMENTS, 1);
+        const pos = geo.attributes.position;
+        const topYs = [];
+
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+
+            if (y > 0) {
+                const nx = (x + spec.w / 2) / spec.w;
+                const n = seededNoise(nx * 6, spec.seed);
+                const displaced = y * 0.05 + n * spec.peakScale;
+                pos.setY(i, displaced);
+                topYs.push({ x, y: displaced });
+            } else {
+                pos.setY(i, y - 3.0);
+            }
+        }
+        geo.computeVertexNormals();
+
+        const mat = new THREE.MeshLambertMaterial({
+            color: new THREE.Color(spec.color),
+            transparent: true,
+            opacity: spec.opacity,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(0, spec.y, spec.z);
+        scene.add(mesh);
+
+        if (layerIdx === 2) {
+            gandalfLayerHeights = topYs.sort((a, b) => a.x - b.x);
+        }
+        return mesh;
+    });
+
+    // Foreground ground plane — solid dark, covers bottom
+    const groundGeo = new THREE.PlaneGeometry(40, 4, 1, 1);
+    const groundMat = new THREE.MeshLambertMaterial({ color: new THREE.Color('#4a5a68'), opacity: 1.0 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.position.set(0, -2.5, -1);
+    scene.add(ground);
+
+    // ----- Terrain height lookup -----
+    function getHeightAt(worldX) {
+        if (!gandalfLayerHeights || gandalfLayerHeights.length === 0) return 0;
+        const arr = gandalfLayerHeights;
+        if (worldX <= arr[0].x) return arr[0].y;
+        if (worldX >= arr[arr.length - 1].x) return arr[arr.length - 1].y;
+        for (let i = 0; i < arr.length - 1; i++) {
+            if (worldX >= arr[i].x && worldX <= arr[i + 1].x) {
+                const t = (worldX - arr[i].x) / (arr[i + 1].x - arr[i].x);
+                return arr[i].y * (1 - t) + arr[i + 1].y * t;
+            }
+        }
+        return 0;
+    }
+
+    // ----- Mist bands -----
+    function makeMistTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 128;
+        const g = c.getContext('2d');
+        const blobs = [
+            { cx: 128, cy: 64, r: 100 },
+            { cx: 256, cy: 50, r: 120 },
+            { cx: 384, cy: 70, r: 90 },
+            { cx: 200, cy: 80, r: 80 },
+        ];
+        for (const b of blobs) {
+            const grad = g.createRadialGradient(b.cx, b.cy, 4, b.cx, b.cy, b.r);
+            grad.addColorStop(0, 'rgba(255,255,255,0.15)');
+            grad.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 512, 128);
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const mistTex = makeMistTexture();
+    const mistBands = [
+        { z: -10, y: 0.0,  opacity: 0.3 },
+        { z: -6,  y: -0.1, opacity: 0.25 },
+    ];
+    for (const m of mistBands) {
+        const mat = new THREE.MeshBasicMaterial({
+            map: mistTex, transparent: true, opacity: m.opacity, depthWrite: false,
+        });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(25, 2), mat);
+        plane.position.set(0, m.y, m.z);
+        scene.add(plane);
+    }
+
+    // ----- Clouds (3 clouds in top portion) -----
+    function makeCloudTexture(seed) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const g = c.getContext('2d');
+        const blobCount = 6 + Math.floor(Math.abs(Math.sin(seed * 7.3)) * 3);
+        for (let i = 0; i < blobCount; i++) {
+            const cx = 60 + (Math.sin(i * 3.7 + seed) * 0.5 + 0.5) * 392;
+            const cy = 80 + (Math.sin(i * 5.1 + seed * 2.3) * 0.5 + 0.5) * 96;
+            const rx = 50 + (Math.sin(i * 2.1 + seed * 1.3) * 0.5 + 0.5) * 70;
+            const ry = rx * (0.4 + Math.sin(i * 4.7 + seed) * 0.15);
+            const grad = g.createRadialGradient(cx, cy, 4, cx, cy, rx);
+            const warmth = cx / 512;
+            grad.addColorStop(0, `rgba(255,${250 + warmth * 5},${240 + warmth * 10},0.25)`);
+            grad.addColorStop(0.6, `rgba(255,${250 + warmth * 5},${240 + warmth * 10},0.08)`);
+            grad.addColorStop(1, `rgba(255,255,250,0)`);
+            g.fillStyle = grad;
+            g.beginPath();
+            g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            g.fill();
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const clouds = [];
+    const cloudConfigs = [
+        { seed: 3,  x: -2, y: 4.5, z: -12, w: 6, h: 2, opacity: 0.5 },
+        { seed: 17, x: 3,  y: 5.0, z: -14, w: 7, h: 2.2, opacity: 0.4 },
+        { seed: 41, x: 7,  y: 4.0, z: -10, w: 5, h: 1.5, opacity: 0.45 },
+    ];
+    for (const cc of cloudConfigs) {
+        const tex = makeCloudTexture(cc.seed);
+        const mat = new THREE.MeshBasicMaterial({
+            map: tex, transparent: true, opacity: cc.opacity, depthWrite: false, fog: false,
+        });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(cc.w, cc.h), mat);
+        plane.position.set(cc.x, cc.y, cc.z);
+        clouds.push(plane);
+        scene.add(plane);
+    }
+
+    // ----- Barad-dûr — FAR RIGHT, between Layer 2 peaks -----
+    const baraddurPos = { x: 5.5, y: 0.4, z: -9 };
+    const baraddur = new THREE.Group();
+    const towerColor = 0x5a4a5a;
+    const towerOpacity = 0.45;
+    const baseMat = new THREE.MeshLambertMaterial({ color: towerColor, transparent: true, opacity: towerOpacity });
+
+    const tBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.12), baseMat);
+    tBase.position.y = 0.125;
+    baraddur.add(tBase);
+    const tMid = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.3, 0.08), baseMat.clone());
+    tMid.position.y = 0.4;
+    baraddur.add(tMid);
+    const tUpper = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.05), baseMat.clone());
+    tUpper.position.y = 0.65;
+    baraddur.add(tUpper);
+    const tSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.025, 0.15, 8), baseMat.clone());
+    tSpire.position.y = 0.825;
+    baraddur.add(tSpire);
+    const tCrown = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 4, 12), baseMat.clone());
+    tCrown.position.y = 0.87;
+    tCrown.rotation.x = Math.PI / 2;
+    baraddur.add(tCrown);
+
+    // Ember glow at top
+    const emberLight = new THREE.PointLight(0xff3300, 1.5, 3);
+    emberLight.position.y = 0.9;
+    baraddur.add(emberLight);
+
+    baraddur.position.set(baraddurPos.x, baraddurPos.y, baraddurPos.z);
+    scene.add(baraddur);
+
+    // ----- Gandalf billboard — left side, LARGE, standing ON a mountain ridge -----
+    const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
+    // PNG is ~500x600 (aspect ~0.83:1). Make him prominent.
+    const gandalfW = 0.9;
+    const gandalfH = 1.2;
+    const gandalfGeo = new THREE.PlaneGeometry(gandalfW, gandalfH);
+    const gandalfMat = new THREE.MeshBasicMaterial({
+        map: gandalfTexture,
+        transparent: true,
+        alphaTest: 0.1,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+    });
+    const gandalf = new THREE.Mesh(gandalfGeo, gandalfMat);
+
+    // Place Gandalf on the near mountain layer (index 2, z:-4)
+    // His x position in local mountain coords
+    const gandalfX = -3.5;
+    const terrainY = getHeightAt(gandalfX);
+    // Layer 2 mesh world y = layerSpecs[2].y = -0.3
+    // World surface = mesh.y + terrainY
+    // Billboard base (bottom edge) should sit on surface, so center = surface + half height
+    const gandalfWorldY = layerSpecs[2].y + terrainY + gandalfH * 0.45;
+    const gandalfBaseY = gandalfWorldY;
+    // Place at same z as the mountain layer so he's clearly ON it
+    gandalf.position.set(gandalfX, gandalfWorldY, -3.9);
+    gandalf.rotation.y = 0.12;
+    scene.add(gandalf);
+
+    // ----- Clock -----
+    const clock = new THREE.Clock();
+
+    // ----- Resize -----
+    window.addEventListener('resize', () => {
+        renderer.setSize(canvasW(), canvasH(), false);
+        camera.aspect = canvasW() / canvasH();
+        camera.updateProjectionMatrix();
+    });
+
+    // ----- Render loop (NO mouse parallax, NO scroll transform) -----
+    function renderLight() {
+        requestAnimationFrame(renderLight);
+
+        if (document.body.classList.contains('dark') && !isTransitioningLight) {
+            return;
+        }
+
+        const elapsed = clock.getElapsedTime();
+
+        // Cloud drift
+        for (const c of clouds) {
+            c.position.x += 0.00015;
+            if (c.position.x > 12) c.position.x = -12;
+        }
+
+        // Gandalf idle wind sway
+        gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
+
+        renderer.render(scene, camera);
+    }
+    renderLight();
+
+    // ----- Expose hooks for toggle handler -----
+    window._lightScene = {
+        canvas, camera, fogOverlay,
+        defaultCameraPos, defaultCameraTarget,
+        baraddurPos,
+        DEFAULT_FOV, ZOOM_FOV,
+        get isTransitioning() { return isTransitioningLight; },
+        set isTransitioning(v) { isTransitioningLight = v; },
+        get isLightMode() { return isLightMode; },
+        set isLightMode(v) { isLightMode = v; },
+        snapToBaraddur() {
+            camera.position.set(baraddurPos.x, baraddurPos.y + 0.5, baraddurPos.z + 1.5);
+            camera.fov = ZOOM_FOV;
+            camera.updateProjectionMatrix();
+            camera.lookAt(baraddurPos.x, baraddurPos.y, baraddurPos.z);
+        },
+        snapToDefault() {
+            camera.position.copy(defaultCameraPos);
+            camera.fov = DEFAULT_FOV;
+            camera.updateProjectionMatrix();
+            camera.lookAt(defaultCameraTarget);
+        },
+    };
+})();
+
+// ============================================================================
+// LIGHT↔DARK TOGGLE EXTENSION — capture-phase listener on the ring button.
+// ============================================================================
+(function attachLightToggle() {
+    const toggle = document.getElementById('theme-toggle');
+    if (!toggle) return;
+
+    toggle.addEventListener('click', (e) => {
+        const ls = window._lightScene;
+        if (!ls || typeof gsap === 'undefined') return;
+
+        if (ls.isTransitioning) {
+            e.stopImmediatePropagation();
+            return;
+        }
+
+        const wasDark = document.body.classList.contains('dark');
+        ls.isTransitioning = true;
+
+        const fogEl = ls.fogOverlay;
+        const cam = ls.camera;
+
+        if (!wasDark) {
+            // LIGHT → DARK
+            gsap.to(cam.position, {
+                x: ls.baraddurPos.x, y: ls.baraddurPos.y + 0.5, z: ls.baraddurPos.z + 1.5,
+                duration: 1.8, ease: 'power2.in',
+                onUpdate: () => cam.lookAt(ls.baraddurPos.x, ls.baraddurPos.y, ls.baraddurPos.z),
+            });
+            gsap.to(cam, {
+                fov: ls.ZOOM_FOV, duration: 1.8, ease: 'power2.in',
+                onUpdate: () => cam.updateProjectionMatrix(),
+            });
+            gsap.to(fogEl, { opacity: 1, duration: 0.9, ease: 'power2.in', delay: 1.0 });
+            gsap.delayedCall(1.8, () => {
+                document.body.classList.remove('light-mode');
+                document.body.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                ls.canvas.style.display = 'none';
+                const sc = document.getElementById('sauron-canvas');
+                if (sc) sc.style.opacity = '1';
+                if (window._sauronForceEyeOpen) window._sauronForceEyeOpen(800);
+            });
+            gsap.to(fogEl, {
+                opacity: 0, duration: 0.7, ease: 'power1.out', delay: 1.8,
+                onComplete: () => { ls.isTransitioning = false; ls.isLightMode = false; ls.snapToDefault(); },
+            });
+            e.stopImmediatePropagation();
+        } else {
+            // DARK → LIGHT
+            gsap.to(fogEl, { opacity: 1, duration: 0.6, ease: 'power2.in' });
+            gsap.delayedCall(0.6, () => {
+                document.body.classList.remove('dark');
+                document.body.classList.add('light-mode');
+                localStorage.setItem('theme', 'light');
+                ls.canvas.style.display = 'block';
+                const sc = document.getElementById('sauron-canvas');
+                if (sc) sc.style.opacity = '0';
+                ls.snapToBaraddur();
+            });
+            gsap.to(fogEl, {
+                opacity: 0, duration: 1.4, ease: 'power1.out', delay: 0.6,
+                onComplete: () => { ls.isTransitioning = false; ls.isLightMode = true; },
+            });
+            gsap.to(cam.position, {
+                x: ls.defaultCameraPos.x, y: ls.defaultCameraPos.y, z: ls.defaultCameraPos.z,
+                duration: 1.8, ease: 'power2.out', delay: 0.6,
+                onUpdate: () => cam.lookAt(ls.defaultCameraTarget.x, ls.defaultCameraTarget.y, ls.defaultCameraTarget.z),
+            });
+            gsap.to(cam, {
+                fov: ls.DEFAULT_FOV, duration: 1.8, ease: 'power2.out', delay: 0.6,
+                onUpdate: () => cam.updateProjectionMatrix(),
+            });
+            e.stopImmediatePropagation();
+        }
+    }, { capture: true });
+})();

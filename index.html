@@ -9,11 +9,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Three.js + GSAP — used by the additive light-mode scene -->
+    <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
 <body>
 
-    <!-- Eye of Sauron — full-viewport canvas (dark mode only) -->
+    <!-- Eye of Sauron — full-viewport canvas (dark mode only, Canvas2D) -->
     <canvas id="sauron-canvas" aria-hidden="true"></canvas>
+
+    <!-- Fog overlay used by light↔dark cinematic transition -->
+    <div id="fogOverlay" aria-hidden="true"></div>
 
     <nav>
         <a href="#" class="nav-name">Shrey Shingala</a>
@@ -72,6 +79,8 @@
 
     <main>
         <section class="hero">
+            <!-- Light-mode WebGL canvas (Misty Mountains, Three.js) lives inside the hero so it scrolls away naturally -->
+            <canvas id="lightModeCanvas" aria-hidden="true"></canvas>
             <h1 class="hero-name">Shrey Shingala</h1>
             <p class="subtitle"><span class="ember-glow">Software Engineering</span> @ <span class="ember-glow">University of Waterloo</span></p>
             <div class="links">
@@ -92,6 +101,7 @@
             </svg>
         </section>
 
+        <div id="content-curtain">
         <section id="about">
             <h2>About</h2>
             <p>I'm a <span class="ember-glow">Software Engineering</span> student at the <span class="ember-glow">University of Waterloo</span>. I love building and am looking forward to getting my iron <span class="ember-glow">ring</span> in 4 years!</p>
@@ -243,6 +253,7 @@
 
             </div>
         </section>
+        </div><!-- /content-curtain -->
 
     </main>
 
