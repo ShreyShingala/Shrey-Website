@@ -1327,13 +1327,108 @@ themeToggle?.addEventListener('click', () => {
     const canvasW = () => canvas.clientWidth || window.innerWidth;
     const canvasH = () => canvas.clientHeight || window.innerHeight;
     renderer.setSize(canvasW(), canvasH(), false);
-    // Clear color matches the grassy plain so any pixel that misses every mesh (e.g. a
-    // steep ray past the bottom of the sky plane) blends seamlessly into the ground.
-    renderer.setClearColor(0xc8d0dc, 1);
+    // ----- Fog mode selection -----
+    // Default uses height mode so the valley pooling effect is immediately visible.
+    const FOG_MODE = 'height'; // 'exp2' | 'height'
 
-    // ----- Scene with exponential fog -----
+    // Approach 1 (FogExp2) strategy:
+    // 1) Use one cool mist color for fog and renderer clear color.
+    // 2) Match the sky's low horizon band to that same mist tint.
+    // This gives a near-camera cool haze that visually transitions into the
+    // darker murky/charcoal sky above, despite FogExp2 using one color.
+    const fogColorExp2 = new THREE.Color('#8f9baa');
+    const exp2Density = 0.0205;
+    const exp2Sky = {
+        horizonDissolve: new THREE.Color('#8f9baa'),
+        horizonSmoke: new THREE.Color('#4f555d'),
+        cloudBelly2: new THREE.Color('#292d34'),
+        stormDark: new THREE.Color('#151722'),
+        zenith: new THREE.Color('#0b0c13'),
+    };
+
+    const heightFog = {
+        color: new THREE.Color('#7e8a97'),
+        depthDensity: 0.034,
+        minY: -5.6,
+        maxY: 0.9,
+        valleyDensityMul: 3.2,
+        highDensityMul: 0.18,
+        valleyBoost: 0.28,
+    };
+
+    renderer.setClearColor(fogColorExp2, 1);
+
+    // ----- Scene -----
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0xc8d0dc, 0.025);
+    scene.fog = FOG_MODE === 'exp2' ? new THREE.FogExp2(fogColorExp2, exp2Density) : null;
+    const heightFogMaterials = [];
+
+    function applyHeightFogToMaterial(material, cfg) {
+        if (!material || material.isShaderMaterial || material.fog === false) return;
+        material.fog = true;
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uHeightFogColor = { value: cfg.color };
+            shader.uniforms.uHeightFogDepthDensity = { value: cfg.depthDensity };
+            shader.uniforms.uHeightFogMinY = { value: cfg.minY };
+            shader.uniforms.uHeightFogMaxY = { value: cfg.maxY };
+            shader.uniforms.uHeightFogValleyDensityMul = { value: cfg.valleyDensityMul };
+            shader.uniforms.uHeightFogHighDensityMul = { value: cfg.highDensityMul };
+            shader.uniforms.uHeightFogValleyBoost = { value: cfg.valleyBoost };
+
+            shader.vertexShader = shader.vertexShader
+                .replace(
+                    '#include <common>',
+                    `#include <common>
+                    varying vec3 vHeightFogWorldPos;`
+                )
+                .replace(
+                    '#include <begin_vertex>',
+                    `#include <begin_vertex>
+                    vHeightFogWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                );
+
+            shader.fragmentShader = shader.fragmentShader
+                .replace(
+                    '#include <common>',
+                    `#include <common>
+                    varying vec3 vHeightFogWorldPos;
+                    uniform vec3 uHeightFogColor;
+                    uniform float uHeightFogDepthDensity;
+                    uniform float uHeightFogMinY;
+                    uniform float uHeightFogMaxY;
+                    uniform float uHeightFogValleyDensityMul;
+                    uniform float uHeightFogHighDensityMul;
+                    uniform float uHeightFogValleyBoost;`
+                )
+                .replace(
+                    '#include <fog_fragment>',
+                    `#ifdef USE_FOG
+                    float heightMask = smoothstep(uHeightFogMaxY, uHeightFogMinY, vHeightFogWorldPos.y);
+                    float depthToCamera = length(vHeightFogWorldPos - cameraPosition);
+                    float localDensity = uHeightFogDepthDensity * mix(
+                        uHeightFogHighDensityMul,
+                        uHeightFogValleyDensityMul,
+                        heightMask
+                    );
+                    float fogAmount = 1.0 - exp(-depthToCamera * localDensity);
+                    fogAmount = clamp(fogAmount + heightMask * uHeightFogValleyBoost, 0.0, 1.0);
+                    gl_FragColor.rgb = mix(gl_FragColor.rgb, uHeightFogColor, fogAmount);
+                    #endif`
+                );
+        };
+        material.customProgramCacheKey = () => {
+            return [
+                'height-fog-v1',
+                cfg.minY,
+                cfg.maxY,
+                cfg.depthDensity,
+                cfg.valleyDensityMul,
+                cfg.highDensityMul,
+                cfg.valleyBoost,
+            ].join(':');
+        };
+        material.needsUpdate = true;
+    }
 
     // ----- Camera — Gandalf left foreground, mountains cascade right, tower far right -----
     const DEFAULT_FOV = 50;
@@ -1353,7 +1448,13 @@ themeToggle?.addEventListener('click', () => {
 
     // ----- Sky (large PlaneGeometry with GLSL ShaderMaterial) -----
     const skyMat = new THREE.ShaderMaterial({
-        uniforms: {},
+        uniforms: {
+            uHorizonDissolve: { value: exp2Sky.horizonDissolve.clone() },
+            uHorizonSmoke: { value: exp2Sky.horizonSmoke.clone() },
+            uCloudBelly2: { value: exp2Sky.cloudBelly2.clone() },
+            uStormDark: { value: exp2Sky.stormDark.clone() },
+            uZenith: { value: exp2Sky.zenith.clone() },
+        },
         vertexShader: `
             varying vec2 vUv;
             void main() {
@@ -1363,6 +1464,11 @@ themeToggle?.addEventListener('click', () => {
         `,
         fragmentShader: `
             varying vec2 vUv;
+            uniform vec3 uHorizonDissolve;
+            uniform vec3 uHorizonSmoke;
+            uniform vec3 uCloudBelly2;
+            uniform vec3 uStormDark;
+            uniform vec3 uZenith;
 
             // Smooth value noise + 6-octave fbm. The high octave count makes the
             // resulting field smooth enough that it never reads as discrete cells
@@ -1407,11 +1513,11 @@ themeToggle?.addEventListener('click', () => {
                 //   • cloud belly: heavy mid grey-purple, the storm underside
                 //   • upper storm: darker grey-purple, deeper cloud mass
                 //   • zenith: deepest near-black storm cap, top 25% only
-                vec3 horizonDissolve = vec3(0.56, 0.59, 0.64); // close to mountain tones
-                vec3 horizonSmoke    = vec3(0.34, 0.32, 0.36);
-                vec3 cloudBelly2     = vec3(0.21, 0.19, 0.23);
-                vec3 stormDark       = vec3(0.115, 0.100, 0.140);
-                vec3 zenith          = vec3(0.045, 0.038, 0.072);
+                vec3 horizonDissolve = uHorizonDissolve;
+                vec3 horizonSmoke    = uHorizonSmoke;
+                vec3 cloudBelly2     = uCloudBelly2;
+                vec3 stormDark       = uStormDark;
+                vec3 zenith          = uZenith;
 
                 vec3 base;
                 if (y < 0.08) {
@@ -1482,6 +1588,12 @@ themeToggle?.addEventListener('click', () => {
     const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(60, 35), skyMat);
     skyPlane.position.set(0, 5, -20);
     scene.add(skyPlane);
+    if (FOG_MODE === 'height') {
+        renderer.setClearColor(heightFog.color, 1);
+        skyMat.uniforms.uHorizonDissolve.value.copy(heightFog.color);
+        skyMat.uniforms.uHorizonSmoke.value.set('#3f454b');
+        skyMat.uniforms.uCloudBelly2.value.set('#22262d');
+    }
 
     // Sun disc + halo removed entirely.
 
@@ -1575,6 +1687,7 @@ themeToggle?.addEventListener('click', () => {
             transparent: spec.opacity < 1,
             opacity: spec.opacity
         });
+        heightFogMaterials.push(mat);
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(0, spec.y, spec.z);
         scene.add(mesh);
@@ -1594,6 +1707,7 @@ themeToggle?.addEventListener('click', () => {
         color: new THREE.Color('#424c42'),
         transparent: false,
     });
+    heightFogMaterials.push(valleyMat);
     const valley = new THREE.Mesh(valleyGeo, valleyMat);
     valley.rotation.x = -Math.PI / 2;
     valley.position.set(0, -5.4, -15);
@@ -1963,6 +2077,7 @@ themeToggle?.addEventListener('click', () => {
         vertexColors: true,
         transparent: false,
     });
+    heightFogMaterials.push(cliffMat);
     const cliff = new THREE.Mesh(cliffGeo, cliffMat);
     cliff.rotation.x = -Math.PI / 2;
     // Plateau (h = PEAK_RISE = 4.7) sits at world Y = -5.78 + 4.7 = -1.08 — Gandalf's feet.
@@ -2172,12 +2287,14 @@ themeToggle?.addEventListener('click', () => {
         map: makeTowerEyeTexture(),
         transparent: true,
         depthWrite: false,
+        depthTest: false,
         fog: false,
         side: THREE.DoubleSide,
     });
     // Eye fits INSIDE the crown — width 0.70 < crown top diameter 0.84, between prongs at ±0.40.
     const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.125), eyeMat);
     eye.position.set(0.025, 1.11, -0.04);
+    eye.renderOrder = 6; // keep slit/pupil readable above additive glow layers
     baraddur.add(eye);
 
     // Ember at the eye — tight 1.2 distance so it doesn't paint the whole tower red
@@ -2189,6 +2306,148 @@ themeToggle?.addEventListener('click', () => {
     // Thinner fortress proportions — less X/Z scale than before, same Y.
     baraddur.scale.set(baraddurScale * 0.85, baraddurScale * 1.5, baraddurScale * 0.85);
     scene.add(baraddur);
+
+    // ----- Eye blink state -----
+    const eyeBaseScaleY = eye.scale.y;
+    let eyeBlinkOpen = 1.0;
+    let eyeBlinkIntensityMul = 1.0;
+    let eyeIsBlinking = false;
+    let eyeBlinkTimer = 0;
+    let eyeBlinkGapTimer = 0;
+    let eyeBlinkRepeatsRemaining = 0;
+    const eyeBlinkDuration = 0.13;
+    let eyeBlinkGapDuration = 0.085;
+    const eyeBlinkMinOpen = 0.03;
+    let eyeBlinkBurstRemaining = 0;
+    let nextEyeBlinkAt = rand(4.2, 6.8);
+
+    function scheduleNextEyeBlink(now) {
+        if (eyeBlinkBurstRemaining > 0) {
+            eyeBlinkBurstRemaining -= 1;
+            nextEyeBlinkAt = now + rand(2.28, 3.15);
+            return;
+        }
+        const roll = Math.random();
+        if (roll < 0.38) {
+            eyeBlinkBurstRemaining = Math.floor(rand(1, 3)); // 1-2 extra near-future blinks
+            nextEyeBlinkAt = now + rand(3.8, 6.5);
+        } else if (roll < 0.83) {
+            nextEyeBlinkAt = now + rand(6.5, 10.5);
+        } else {
+            nextEyeBlinkAt = now + rand(10.5, 16.0); // occasional long pause
+        }
+    }
+
+    function makeEyeGlowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const g = c.getContext('2d');
+        const cx = 128, cy = 128;
+        const grad = g.createRadialGradient(cx, cy, 4, cx, cy, 118);
+        grad.addColorStop(0.00, 'rgba(255,228,140,0.95)');
+        grad.addColorStop(0.18, 'rgba(255,120,36,0.72)');
+        grad.addColorStop(0.45, 'rgba(255,52,20,0.40)');
+        grad.addColorStop(0.80, 'rgba(165,20,10,0.10)');
+        grad.addColorStop(1.00, 'rgba(100,0,0,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, c.width, c.height);
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    function makeEyeFlameTexture() {
+        const c = document.createElement('canvas');
+        c.width = 96; c.height = 96;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(48, 48, 3, 48, 48, 44);
+        grad.addColorStop(0.00, 'rgba(255,245,180,1.0)');
+        grad.addColorStop(0.25, 'rgba(255,156,55,0.95)');
+        grad.addColorStop(0.62, 'rgba(255,66,18,0.55)');
+        grad.addColorStop(1.00, 'rgba(120,8,0,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, c.width, c.height);
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeEyeGlowTexture(),
+        transparent: true,
+        opacity: 0.62,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
+    }));
+    eyeGlow.position.set(eye.position.x, eye.position.y, eye.position.z - 0.02);
+    eyeGlow.scale.set(0.95, 0.36, 1);
+    eyeGlow.renderOrder = 2;
+    baraddur.add(eyeGlow);
+
+    const eyeCoreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeEyeGlowTexture(),
+        transparent: true,
+        opacity: 0.40,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
+    }));
+    eyeCoreGlow.position.set(eye.position.x, eye.position.y, eye.position.z - 0.024);
+    eyeCoreGlow.scale.set(0.42, 0.16, 1);
+    eyeCoreGlow.renderOrder = 3;
+    baraddur.add(eyeCoreGlow);
+
+    const eyeFlameTexture = makeEyeFlameTexture();
+    const eyeFlameParticles = [];
+    let nextEyeFlameSpawnAt = 0;
+
+    // ----- Spotlight search state machine -----
+    const SAURON_SEARCH_STATE = {
+        RESTING: 'resting',
+        SEARCHING: 'searching',
+        COOLDOWN: 'cooldown',
+    };
+    let sauronSearchState = SAURON_SEARCH_STATE.RESTING;
+    let sauronFirstSweepStarted = false;
+    let sauronSearchEndsAt = 0;
+    let sauronCooldownEndsAt = 0;
+    let sauronPrevElapsed = 0;
+    let sauronSweepSeed = Math.random() * 1000;
+
+    // Spot target must live in scene graph so spotLight tracks updates.
+    const sauronSpotTarget = new THREE.Object3D();
+    sauronSpotTarget.position.set(6.0, -2.3, -18.0);
+    scene.add(sauronSpotTarget);
+
+    const sauronSpotLight = new THREE.SpotLight(
+        0xff9d42,
+        0.0,
+        190,
+        THREE.MathUtils.degToRad(18),
+        0.44,
+        1.35
+    );
+    sauronSpotLight.position.set(baraddurPos.x, baraddurPos.y + 3.3, baraddurPos.z + 0.25);
+    sauronSpotLight.target = sauronSpotTarget;
+    sauronSpotLight.visible = false;
+    scene.add(sauronSpotLight);
+
+    function startSauronSearch(atTime) {
+        sauronFirstSweepStarted = true;
+        sauronSearchState = SAURON_SEARCH_STATE.SEARCHING;
+        sauronSearchEndsAt = atTime + rand(5.0, 10.0);
+        sauronSweepSeed = Math.random() * 1000;
+        sauronSpotLight.visible = true;
+        sauronSpotLight.intensity = 4.2;
+    }
+
+    function stopSauronSearch(now) {
+        sauronSearchState = SAURON_SEARCH_STATE.COOLDOWN;
+        sauronCooldownEndsAt = now + 45.0;
+        sauronSpotLight.intensity = 0.0;
+        sauronSpotLight.visible = false;
+    }
 
     // ----- Gandalf billboard — left foreground, standing on the cliff edge -----
     const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
@@ -2255,6 +2514,67 @@ themeToggle?.addEventListener('click', () => {
         return min + Math.random() * (max - min);
     }
 
+    function emitEyeFlameParticle() {
+        if (!eyeFlameTexture || eyeFlameParticles.length > 110) return;
+        const mat = new THREE.SpriteMaterial({
+            map: eyeFlameTexture,
+            transparent: true,
+            depthWrite: false,
+            fog: false,
+            blending: THREE.AdditiveBlending,
+            opacity: rand(0.38, 0.82),
+            color: new THREE.Color(0xff5d22).offsetHSL(rand(-0.015, 0.02), rand(-0.04, 0.05), rand(-0.06, 0.08)),
+        });
+        const s = new THREE.Sprite(mat);
+        const startScale = rand(0.030, 0.072);
+        s.scale.set(startScale, startScale * rand(1.2, 1.8), 1);
+        s.position.set(
+            eye.position.x + rand(-0.14, 0.14),
+            eye.position.y + rand(-0.05, 0.06),
+            eye.position.z + rand(-0.05, 0.03)
+        );
+        s.renderOrder = 3;
+        baraddur.add(s);
+        eyeFlameParticles.push({
+            sprite: s,
+            age: 0,
+            life: rand(0.22, 0.58),
+            startScale,
+            grow: rand(0.05, 0.18),
+            vx: rand(-0.08, 0.08),
+            vy: rand(0.045, 0.17),
+            vz: rand(-0.05, 0.05),
+            wobbleAmp: rand(0.02, 0.09),
+            wobbleFreq: rand(8.0, 16.0),
+            phase: rand(0, Math.PI * 2),
+        });
+    }
+
+    function updateEyeFlame(deltaTime, elapsed) {
+        if (elapsed >= nextEyeFlameSpawnAt) {
+            const spawnCount = Math.random() < 0.32 ? 2 : 1;
+            for (let i = 0; i < spawnCount; i++) emitEyeFlameParticle();
+            nextEyeFlameSpawnAt = elapsed + rand(0.025, 0.11);
+        }
+        for (let i = eyeFlameParticles.length - 1; i >= 0; i--) {
+            const p = eyeFlameParticles[i];
+            p.age += deltaTime;
+            const t = p.age / p.life;
+            if (t >= 1) {
+                baraddur.remove(p.sprite);
+                p.sprite.material.dispose();
+                eyeFlameParticles.splice(i, 1);
+                continue;
+            }
+            p.sprite.position.x += (p.vx + Math.sin(elapsed * p.wobbleFreq + p.phase) * p.wobbleAmp) * deltaTime;
+            p.sprite.position.y += p.vy * deltaTime;
+            p.sprite.position.z += p.vz * deltaTime;
+            const flameScale = p.startScale + p.grow * (0.45 * t + t * t);
+            p.sprite.scale.set(flameScale, flameScale * 1.45, 1);
+            p.sprite.material.opacity = Math.pow(1 - t, 1.35) * 0.95;
+        }
+    }
+
     function makeSmokeTexture() {
         const size = 128;
         const c = document.createElement('canvas');
@@ -2289,6 +2609,12 @@ themeToggle?.addEventListener('click', () => {
     }
 
     const smokeTexture = makeSmokeTexture();
+
+    if (FOG_MODE === 'height') {
+        for (const mat of heightFogMaterials) {
+            applyHeightFogToMaterial(mat, heightFog);
+        }
+    }
 
     function getPipeTipWorld() {
         pipeTipWorld.copy(pipeTipLocal);
@@ -2504,10 +2830,90 @@ themeToggle?.addEventListener('click', () => {
             fog.position.y = cfg.y + Math.sin(elapsed * 0.09 + cfg.phase) * 0.05;
         }
 
+        // Eye blink timing: clustered/jittery cadence (dark-mode-like),
+        // with occasional doubles/triples.
+        if (!eyeIsBlinking && elapsed >= nextEyeBlinkAt) {
+            eyeIsBlinking = true;
+            eyeBlinkTimer = 0;
+            eyeBlinkGapTimer = 0;
+            eyeBlinkGapDuration = rand(0.055, 0.14);
+            const burstRoll = Math.random();
+            eyeBlinkRepeatsRemaining = burstRoll < 0.08 ? 3 : burstRoll < 0.40 ? 2 : 1;
+        }
+        if (eyeIsBlinking) {
+            if (eyeBlinkGapTimer > 0) {
+                eyeBlinkGapTimer -= deltaTime;
+                if (eyeBlinkGapTimer <= 0) eyeBlinkTimer = 0;
+            } else {
+                eyeBlinkTimer += deltaTime;
+                const t = Math.min(eyeBlinkTimer / eyeBlinkDuration, 1.0);
+                const closeAmount = Math.sin(t * Math.PI);
+                eyeBlinkOpen = Math.max(eyeBlinkMinOpen, 1.0 - closeAmount);
+                eyeBlinkIntensityMul = 0.52 + eyeBlinkOpen * 0.48;
+                if (t >= 1.0) {
+                    eyeBlinkRepeatsRemaining -= 1;
+                    if (eyeBlinkRepeatsRemaining > 0) {
+                        eyeBlinkGapTimer = eyeBlinkGapDuration;
+                    } else {
+                        eyeIsBlinking = false;
+                        eyeBlinkOpen = 1.0;
+                        eyeBlinkIntensityMul = 1.0;
+                        scheduleNextEyeBlink(elapsed);
+                    }
+                }
+            }
+        } else {
+            eyeBlinkOpen = 1.0;
+            eyeBlinkIntensityMul = 1.0;
+        }
+
+        // Spot search state machine:
+        // first sweep starts exactly when timeline crosses 10s.
+        if (!sauronFirstSweepStarted && sauronPrevElapsed < 10.0 && elapsed >= 10.0) {
+            startSauronSearch(10.0);
+        }
+
+        if (sauronSearchState === SAURON_SEARCH_STATE.SEARCHING) {
+            if (elapsed >= sauronSearchEndsAt) {
+                stopSauronSearch(elapsed);
+            } else {
+                const t = elapsed + sauronSweepSeed;
+                const rawX = 5.0 + Math.sin(t * 0.90) * 17.5 + Math.sin(t * 2.05 + 1.3) * 4.8;
+                const rawZ = -18.5 + Math.cos(t * 0.74 + 0.8) * 10.8 + Math.sin(t * 1.6) * 3.2;
+                const targetX = THREE.MathUtils.clamp(rawX, -22.0, 18.0);
+                const targetZ = THREE.MathUtils.clamp(rawZ, -38.0, -6.0);
+                const targetY = -2.5 + Math.sin(t * 1.15 + 0.5) * 0.95;
+                const follow = 1.0 - Math.exp(-deltaTime * 3.2);
+                sauronSpotTarget.position.x += (targetX - sauronSpotTarget.position.x) * follow;
+                sauronSpotTarget.position.y += (targetY - sauronSpotTarget.position.y) * follow;
+                sauronSpotTarget.position.z += (targetZ - sauronSpotTarget.position.z) * follow;
+                sauronSpotLight.intensity = 4.0 + Math.sin(t * 2.0) * 0.35;
+                sauronSpotLight.angle = THREE.MathUtils.degToRad(17.5 + Math.sin(t * 0.85) * 1.8);
+            }
+        } else if (sauronSearchState === SAURON_SEARCH_STATE.COOLDOWN) {
+            if (elapsed >= sauronCooldownEndsAt) {
+                sauronSearchState = SAURON_SEARCH_STATE.RESTING;
+            }
+        } else if (
+            sauronSearchState === SAURON_SEARCH_STATE.RESTING &&
+            sauronFirstSweepStarted &&
+            elapsed >= sauronCooldownEndsAt
+        ) {
+            startSauronSearch(elapsed);
+        }
+        sauronPrevElapsed = elapsed;
+
         const eyePulse = (Math.sin(elapsed * 0.8) + 1) * 0.5;
         const eyeOpacity = 0.7 + eyePulse * 0.3;
         eyeMat.opacity = eyeOpacity;
-        emberLight.intensity = 1.9 * eyeOpacity;
+        eye.scale.y = eyeBaseScaleY * eyeBlinkOpen;
+        emberLight.intensity = 1.9 * eyeOpacity * eyeBlinkIntensityMul;
+        const eyeGlowPulse = (Math.sin(elapsed * 2.2 + 0.3) + 1) * 0.5;
+        eyeGlow.material.opacity = (0.34 + eyeGlowPulse * 0.38) * eyeBlinkOpen;
+        eyeGlow.scale.set(0.94 + eyeGlowPulse * 0.26, 0.34 + eyeGlowPulse * 0.11, 1);
+        eyeCoreGlow.material.opacity = (0.20 + eyeGlowPulse * 0.28) * eyeBlinkOpen;
+        eyeCoreGlow.scale.set(0.38 + eyeGlowPulse * 0.10, 0.15 + eyeGlowPulse * 0.05, 1);
+        updateEyeFlame(deltaTime, elapsed);
 
         // Gandalf idle wind sway
         gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
