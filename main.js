@@ -1363,26 +1363,39 @@ themeToggle?.addEventListener('click', () => {
         `,
         fragmentShader: `
             varying vec2 vUv;
+
             void main() {
                 float y = vUv.y;
                 float x = vUv.x;
-                // Vertical: warm low band → soft blue mid → cooler high
-                vec3 warmLow   = vec3(0.941, 0.752, 0.439); // #f0c070
-                vec3 softBlue  = vec3(0.627, 0.722, 0.816); // #a0b8d0
-                vec3 highBlue  = vec3(0.486, 0.580, 0.690);
-                vec3 stormy    = vec3(0.227, 0.125, 0.188); // #3a2030 — corrupted Mordor sky
+
+                // ----- Vertical gradient: pale gold horizon → steel blue mid → cold deep blue -----
+                vec3 horizonGold = vec3(0.93, 0.88, 0.78); // warm pale gold at horizon
+                vec3 steelBlue   = vec3(0.62, 0.74, 0.86); // clean steel-blue mid sky
+                vec3 coldHigh    = vec3(0.36, 0.50, 0.70); // deeper cold blue up top
+
                 vec3 base;
-                if (y < 0.35) {
-                    base = mix(warmLow, softBlue, y / 0.35);
+                if (y < 0.32) {
+                    base = mix(horizonGold, steelBlue, y / 0.32);
                 } else {
-                    base = mix(softBlue, highBlue, (y - 0.35) / 0.65);
+                    base = mix(steelBlue, coldHigh, (y - 0.32) / 0.68);
                 }
-                // Left 40% bias toward warm dawn gold-peach
-                float leftWarm = smoothstep(0.40, 0.0, x);
-                base = mix(base, warmLow, leftWarm * 0.55);
-                // Right 40% bias toward dark stormy Mordor
-                float rightDark = smoothstep(0.60, 1.0, x);
-                base = mix(base, stormy, rightDark * 0.85);
+
+                // ----- Left: gentle warm dawn glow -----
+                // Soft gold-white lift on the lower-left horizon — feels like
+                // dawn light on the hopeful side of the frame.
+                vec3 dawnTint = vec3(0.97, 0.92, 0.80);
+                float dawnGlow = smoothstep(0.40, 0.0, x) * smoothstep(0.55, 0.0, y);
+                base = mix(base, dawnTint, dawnGlow * 0.32);
+
+                // ----- Right: subtle cool shadow toward Mordor -----
+                // Pull a small amount of brightness out and shift the hue toward
+                // a desaturated cool purple-grey. Strength capped low so the
+                // effect reads as "clouds gathering on the horizon" rather than
+                // a colored mass on the sky.
+                vec3 shadowTint = vec3(0.30, 0.30, 0.38); // cool purple-grey
+                float rightShadow = smoothstep(0.45, 1.0, x);
+                base = mix(base, shadowTint, rightShadow * 0.28);
+
                 gl_FragColor = vec4(base, 1.0);
             }
         `,
@@ -2159,10 +2172,241 @@ themeToggle?.addEventListener('click', () => {
     const gandalfBaseY = gandalfWorldY;
     gandalf.position.set(gandalfX, gandalfWorldY, gandalfZ);
     gandalf.rotation.y = 0.0; // facing right toward the tower (back of cloak to camera)
+    gandalf.renderOrder = 2;
     scene.add(gandalf);
+
+    // Tiny pipe tucked by Gandalf's mouth line.
+    const pipeMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1715 });
+    const pipeBowlMaterial = new THREE.MeshBasicMaterial({ color: 0x1a120f });
+    const pipeStem = new THREE.Mesh(new THREE.BoxGeometry(0.082, 0.009, 0.011), pipeMaterial);
+    pipeStem.position.set(0.108, 0.352, 0.028);
+    pipeStem.rotation.set(0.02, -0.22, -0.36);
+    pipeStem.renderOrder = 3;
+    gandalf.add(pipeStem);
+    const pipeBowlOuter = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.008, 0.02, 14), pipeBowlMaterial);
+    pipeBowlOuter.position.set(0.052, 0.003, 0.0);
+    pipeBowlOuter.rotation.z = 0.06;
+    pipeBowlOuter.renderOrder = 3;
+    pipeStem.add(pipeBowlOuter);
+    const pipeBowlChamber = new THREE.Mesh(new THREE.CircleGeometry(0.0058, 14), new THREE.MeshBasicMaterial({ color: 0x070606 }));
+    pipeBowlChamber.position.set(0.052, 0.0135, 0.0);
+    pipeBowlChamber.rotation.x = -Math.PI * 0.5;
+    pipeBowlChamber.renderOrder = 3;
+    pipeStem.add(pipeBowlChamber);
+
+    // Pipe smoke particles (organic, irregular puffs drifting left with altitude).
+    const smokeParticles = [];
+    const lightWispBaseColor = new THREE.Color(0xeaf2fb);
+    const darkSmokeBaseColor = new THREE.Color(0x8f98a6);
+    const pipeTipLocal = new THREE.Vector3(0.052, 0.016, 0);
+    const pipeTipWorld = new THREE.Vector3();
+    const TAU = Math.PI * 2;
+    let nextDarkSmokeAt = 0;
+    let nextWispAt = 0;
+    let queuedDarkGroupPuffs = 0;
+    let breezeStrength = 0;
+    let breezeTarget = 0;
+    let nextBreezeShiftAt = 0;
+    let breezeTurbulence = 0;
+    let breezeFreq = 0.3;
+    let breezePhase = Math.random() * TAU;
+
+    function rand(min, max) {
+        return min + Math.random() * (max - min);
+    }
+
+    function makeSmokeTexture() {
+        const size = 128;
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        const g = c.getContext('2d');
+        if (!g) return null;
+
+        const cx = size * 0.5;
+        const cy = size * 0.5;
+        const grad = g.createRadialGradient(cx, cy, size * 0.05, cx, cy, size * 0.5);
+        grad.addColorStop(0.0, 'rgba(240,248,255,0.95)');
+        grad.addColorStop(0.3, 'rgba(220,232,248,0.58)');
+        grad.addColorStop(0.65, 'rgba(210,224,245,0.20)');
+        grad.addColorStop(1.0, 'rgba(210,224,245,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, size, size);
+
+        // Soft lumpy edges so wisps are less perfectly circular.
+        g.globalCompositeOperation = 'destination-out';
+        for (let i = 0; i < 7; i++) {
+            g.beginPath();
+            g.arc(rand(size * 0.12, size * 0.88), rand(size * 0.12, size * 0.88), rand(size * 0.06, size * 0.18), 0, TAU);
+            g.fillStyle = `rgba(0,0,0,${rand(0.03, 0.09).toFixed(3)})`;
+            g.fill();
+        }
+        g.globalCompositeOperation = 'source-over';
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const smokeTexture = makeSmokeTexture();
+
+    function getPipeTipWorld() {
+        pipeTipWorld.copy(pipeTipLocal);
+        pipeStem.localToWorld(pipeTipWorld);
+        return pipeTipWorld;
+    }
+
+    function queueNextDarkSmoke(now) {
+        if (queuedDarkGroupPuffs > 0) {
+            queuedDarkGroupPuffs -= 1;
+            nextDarkSmokeAt = now + rand(0.34, 0.85);
+            return;
+        }
+
+        const roll = Math.random();
+        if (roll < 0.48) {
+            queuedDarkGroupPuffs = Math.floor(rand(1, 4));
+            nextDarkSmokeAt = now + rand(1.8, 4.8);
+        } else {
+            nextDarkSmokeAt = now + rand(4.8, 8.8);
+        }
+    }
+
+    function queueNextWisp(now) {
+        nextWispAt = now + rand(0.08, 0.2);
+    }
+
+    function updateBreeze(elapsed, deltaTime) {
+        if (elapsed >= nextBreezeShiftAt) {
+            const breezeOn = Math.random() < 0.67;
+            breezeTarget = breezeOn ? rand(0.035, 0.12) : rand(0.0, 0.015);
+            breezeTurbulence = breezeOn ? rand(0.01, 0.045) : rand(0.002, 0.012);
+            breezeFreq = breezeOn ? rand(0.2, 0.65) : rand(0.08, 0.25);
+            breezePhase = rand(0, TAU);
+            nextBreezeShiftAt = elapsed + (breezeOn ? rand(1.8, 4.8) : rand(0.9, 2.8));
+        }
+
+        const response = breezeTarget > breezeStrength ? 0.75 : 0.38;
+        const blend = 1 - Math.exp(-response * deltaTime);
+        breezeStrength += (breezeTarget - breezeStrength) * blend;
+    }
+
+    function emitSmokePuff(kind = 'dark') {
+        if (!smokeTexture) return;
+
+        const origin = getPipeTipWorld();
+        const isClick = kind === 'click';
+        const isWisp = kind === 'wisp';
+        const isDarkGroup = !isWisp;
+        const count = isClick
+            ? Math.floor(rand(14, 22))
+            : isWisp
+                ? Math.floor(rand(2, 5))
+                : Math.floor(rand(4, 9));
+
+        for (let i = 0; i < count; i++) {
+            const baseColor = isWisp ? lightWispBaseColor : darkSmokeBaseColor;
+            const spriteMaterial = new THREE.SpriteMaterial({
+                map: smokeTexture,
+                transparent: true,
+                depthWrite: false,
+                fog: !isWisp,
+                color: isWisp
+                    ? baseColor.clone().offsetHSL(rand(-0.007, 0.007), rand(-0.012, 0.015), rand(0.01, 0.1))
+                    : baseColor.clone().offsetHSL(rand(-0.01, 0.01), rand(-0.02, 0.02), rand(-0.03, 0.02)),
+                opacity: isWisp ? rand(0.12, 0.23) : isClick ? rand(0.32, 0.52) : rand(0.24, 0.42),
+                blending: THREE.NormalBlending,
+            });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            const startScale = isWisp ? rand(0.03, 0.064) : isClick ? rand(0.14, 0.28) : rand(0.1, 0.22);
+            sprite.scale.set(startScale, startScale, 1);
+            sprite.position.set(
+                origin.x + rand(-0.014, 0.018),
+                origin.y + rand(-0.01, 0.015),
+                origin.z - (isWisp ? rand(0.025, 0.08) : rand(0.05, 0.14))
+            );
+            sprite.renderOrder = 1;
+            scene.add(sprite);
+
+            smokeParticles.push({
+                sprite,
+                age: 0,
+                life: isWisp ? rand(2.4, 4.8) : isClick ? rand(8.0, 13.5) : rand(7.0, 12.5),
+                startScale,
+                grow: isWisp ? rand(0.14, 0.34) : isClick ? rand(0.95, 1.9) : rand(0.75, 1.6),
+                baseOpacity: spriteMaterial.opacity,
+                vx: isWisp ? rand(-0.01, 0.011) : rand(-0.016, 0.012),
+                vy: isWisp ? rand(0.016, 0.046) : rand(0.032, 0.072),
+                vz: rand(-0.006, 0.006),
+                rise: isWisp ? rand(0.032, 0.078) : rand(0.06, 0.12),
+                leftDrift: isWisp ? rand(0.006, 0.02) : isClick ? rand(0.01, 0.03) : rand(0.009, 0.025),
+                leftDriftGain: isWisp ? rand(0.016, 0.04) : rand(0.028, 0.065),
+                drag: isWisp ? rand(0.24, 0.58) : rand(0.12, 0.36),
+                jitterX: isWisp ? rand(0.018, 0.058) : rand(0.03, 0.1),
+                jitterY: isWisp ? rand(0.008, 0.028) : rand(0.02, 0.06),
+                wobbleXFreq: isWisp ? rand(0.7, 2.8) : rand(0.45, 1.5),
+                wobbleYFreq: isWisp ? rand(0.8, 2.1) : rand(0.45, 1.3),
+                wobbleZFreq: isWisp ? rand(0.6, 1.8) : rand(0.35, 1.0),
+                phaseX: rand(0, TAU),
+                phaseY: rand(0, TAU),
+                phaseZ: rand(0, TAU),
+                fadePower: isWisp ? rand(1.15, 1.55) : rand(0.9, 1.2),
+                pulseAmp: isWisp ? 0.09 : 0.14,
+                plumeBias: isDarkGroup ? rand(0.01, 0.04) : 0,
+                breezeResponse: isWisp ? rand(0.7, 1.35) : rand(0.9, 1.7),
+                gustPhase: rand(0, TAU),
+            });
+        }
+    }
+
+    function updateSmoke(deltaTime, elapsed) {
+        const gustBase = Math.max(0, breezeStrength + Math.sin(elapsed * breezeFreq + breezePhase) * breezeTurbulence);
+        for (let i = smokeParticles.length - 1; i >= 0; i--) {
+            const p = smokeParticles[i];
+            p.age += deltaTime;
+            const t = p.age / p.life;
+            if (t >= 1) {
+                scene.remove(p.sprite);
+                p.sprite.material.dispose();
+                smokeParticles.splice(i, 1);
+                continue;
+            }
+
+            const gustJitter = Math.sin(elapsed * (0.7 + p.wobbleXFreq * 0.55) + p.gustPhase) * 0.018;
+            const gust = Math.max(0, gustBase + gustJitter) * p.breezeResponse;
+            const leftAccel = p.leftDrift + p.leftDriftGain * t + gust;
+            p.vx -= leftAccel * deltaTime;
+            p.vy += (p.rise * (0.65 + 1.05 * t)) * deltaTime;
+            if (p.plumeBias) p.vy += p.plumeBias * deltaTime;
+
+            p.vx += Math.sin(elapsed * p.wobbleXFreq + p.phaseX) * p.jitterX * deltaTime;
+            p.vy += Math.cos(elapsed * p.wobbleYFreq + p.phaseY) * p.jitterY * deltaTime;
+            p.vz += Math.sin(elapsed * p.wobbleZFreq + p.phaseZ) * 0.012 * deltaTime;
+
+            const drag = Math.exp(-p.drag * deltaTime);
+            p.vx *= drag;
+            p.vy *= drag;
+            p.vz *= drag;
+
+            p.sprite.position.x += p.vx * deltaTime;
+            p.sprite.position.y += p.vy * deltaTime;
+            p.sprite.position.z += p.vz * deltaTime;
+
+            const scale = p.startScale + p.grow * (0.55 * t + t * t);
+            p.sprite.scale.set(scale, scale, 1);
+            const opacityPulse = 0.92 + Math.sin(elapsed * (0.9 + p.wobbleYFreq * 0.6) + p.phaseY) * p.pulseAmp;
+            p.sprite.material.opacity = p.baseOpacity * Math.pow(1 - t, p.fadePower) * opacityPulse;
+        }
+    }
+
+    document.addEventListener('click', () => {
+        if (document.body.classList.contains('dark')) return;
+        emitSmokePuff('click');
+    });
 
     // ----- Clock -----
     const clock = new THREE.Clock();
+    let previousElapsed = 0;
 
     // ----- Resize -----
     window.addEventListener('resize', () => {
@@ -2180,6 +2424,8 @@ themeToggle?.addEventListener('click', () => {
         }
 
         const elapsed = clock.getElapsedTime();
+        const deltaTime = Math.min(0.05, Math.max(0.001, elapsed - previousElapsed));
+        previousElapsed = elapsed;
 
         // Cloud drift
         for (const c of clouds) {
@@ -2222,6 +2468,24 @@ themeToggle?.addEventListener('click', () => {
 
         // Gandalf idle wind sway
         gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
+
+        // Pipe smoke: constant light wisps + grouped dark plumes.
+        if (nextDarkSmokeAt === 0) {
+            queueNextDarkSmoke(elapsed + rand(1.2, 3.0));
+        }
+        if (nextWispAt === 0) {
+            queueNextWisp(elapsed + rand(0.03, 0.16));
+        }
+        if (elapsed >= nextDarkSmokeAt) {
+            emitSmokePuff('dark');
+            queueNextDarkSmoke(elapsed);
+        }
+        if (elapsed >= nextWispAt) {
+            emitSmokePuff('wisp');
+            queueNextWisp(elapsed);
+        }
+        updateBreeze(elapsed, deltaTime);
+        updateSmoke(deltaTime, elapsed);
 
         renderer.render(scene, camera);
     }
