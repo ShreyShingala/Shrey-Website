@@ -1364,56 +1364,113 @@ themeToggle?.addEventListener('click', () => {
         fragmentShader: `
             varying vec2 vUv;
 
+            // Smooth value noise + 6-octave fbm. The high octave count makes the
+            // resulting field smooth enough that it never reads as discrete cells
+            // (which is what produced the "oval" artifacts in earlier attempts).
+            float hash21(vec2 p) {
+                p = fract(p * vec2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return fract(p.x * p.y);
+            }
+            float vnoise(vec2 p) {
+                vec2 i = floor(p);
+                vec2 f = fract(p);
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                float a = hash21(i);
+                float b = hash21(i + vec2(1.0, 0.0));
+                float c = hash21(i + vec2(0.0, 1.0));
+                float d = hash21(i + vec2(1.0, 1.0));
+                return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+            }
+            float fbm(vec2 p) {
+                float v = 0.0;
+                float a = 0.5;
+                for (int i = 0; i < 6; i++) {
+                    v += a * vnoise(p);
+                    p = p * 2.07 + vec2(0.31, -0.27);
+                    a *= 0.5;
+                }
+                return v;
+            }
+
             void main() {
                 float y = vUv.y;
                 float x = vUv.x;
 
-                // ----- Base: oppressive storm sky -----
-                // Upper two-thirds dominated by dark charcoal-purple. The lower
-                // band is only slightly lifted so horizon variations (cold light
-                // on the left, fire on the right) can read clearly against it.
-                vec3 stormTop = vec3(0.045, 0.040, 0.075); // near-black with purple bias
-                vec3 stormMid = vec3(0.110, 0.100, 0.140); // heavy storm grey-purple
-                vec3 stormLow = vec3(0.195, 0.175, 0.220); // slightly lifted base
+                // ----- Layered vertical gradient -----
+                // Five bands so the sky has volumetric depth AND dissolves into
+                // the mountain peaks instead of meeting them at a hard edge:
+                //   • dissolve: light smoky grey-blue at the very bottom that
+                //     matches the distant mountain shoulder tones, so the sky
+                //     bleeds into the silhouettes rather than capping them
+                //   • horizon: transitional smoky grey
+                //   • cloud belly: heavy mid grey-purple, the storm underside
+                //   • upper storm: darker grey-purple, deeper cloud mass
+                //   • zenith: deepest near-black storm cap, top 25% only
+                vec3 horizonDissolve = vec3(0.56, 0.59, 0.64); // close to mountain tones
+                vec3 horizonSmoke    = vec3(0.34, 0.32, 0.36);
+                vec3 cloudBelly2     = vec3(0.21, 0.19, 0.23);
+                vec3 stormDark       = vec3(0.115, 0.100, 0.140);
+                vec3 zenith          = vec3(0.045, 0.038, 0.072);
 
                 vec3 base;
-                if (y < 0.35) {
-                    base = mix(stormLow, stormMid, y / 0.35);
+                if (y < 0.08) {
+                    base = mix(horizonDissolve, horizonSmoke, y / 0.08);
+                } else if (y < 0.22) {
+                    base = mix(horizonSmoke, cloudBelly2, (y - 0.08) / 0.14);
+                } else if (y < 0.50) {
+                    base = mix(cloudBelly2, stormDark, (y - 0.22) / 0.28);
+                } else if (y < 0.78) {
+                    base = mix(stormDark, zenith, (y - 0.50) / 0.28);
                 } else {
-                    base = mix(stormMid, stormTop, (y - 0.35) / 0.65);
+                    base = zenith;
                 }
 
-                // ----- Left: faint cold blue-grey glow -----
-                // A reluctant rim of light along the lower-left horizon — the
-                // last hint of the world outside Mordor's influence. Soft and
-                // strongest right at the horizon, fading up and inward.
-                vec3 hopeTint = vec3(0.62, 0.68, 0.76);
-                float hopeX = smoothstep(0.42, 0.0, x);
-                float hopeY = smoothstep(0.55, 0.0, y);
-                base = mix(base, hopeTint, hopeX * hopeY * 0.55);
+                // ----- Subtle cloud texture: brightness modulation only -----
+                // Two stretched fbm layers at different frequencies blend into a
+                // soft ±brightness factor. Used as a multiplicative tint on the
+                // base color (no separate "cloud color" injected) so it can
+                // never produce the bright-blob artifact: where noise is high
+                // the sky lifts a touch, where it is low the sky deepens — the
+                // hue stays the same. Gated to the mid-sky band so the horizon
+                // ember and zenith stay clean.
+                float cloudCoarse = fbm(vec2(x * 3.2, y * 1.4 + 0.3));
+                float cloudFine   = fbm(vec2(x * 6.8 + 1.7, y * 2.9 - 0.6));
+                float cloudVar    = (cloudCoarse - 0.5) * 0.55 + (cloudFine - 0.5) * 0.30;
+                float cloudWeight = smoothstep(0.10, 0.32, y) * (1.0 - smoothstep(0.78, 1.0, y));
+                base *= 1.0 + cloudVar * cloudWeight * 0.45;
 
-                // ----- Right: burning Mordor horizon -----
-                // Fire from the foothills of Mount Doom lighting the sky. A hot
-                // orange-red core right at the bottom-right horizon, mid red
-                // bleed rising into the cloud bases, and a faint red underbelly
-                // staining the smoke higher up. All three are gated horizontally
-                // so the effect only appears on the right side of the frame.
+                // ----- Left horizon: cold grey-blue glow -----
+                // A faint cooler lift on the lower-left horizon, the side of
+                // the world furthest from the fire.
+                vec3 hopeTint = vec3(0.46, 0.52, 0.60);
+                float hopeX = smoothstep(0.42, 0.0, x);
+                float hopeY = smoothstep(0.45, 0.0, y);
+                base = mix(base, hopeTint, hopeX * hopeY * 0.50);
+
+                // ----- Right horizon: Mordor fire bleeding upward -----
+                // Three stacked ember bands gated horizontally to the right.
+                // Each fades up at a different rate so the result reads as heat
+                // rising and staining the cloud bases instead of a flat patch.
                 float rightX = smoothstep(0.42, 0.95, x);
 
-                // Hot intense ember at the horizon line itself
-                vec3 emberHot  = vec3(0.94, 0.32, 0.06);
-                float hotY = pow(1.0 - smoothstep(0.0, 0.13, y), 1.4);
-                base = mix(base, emberHot, rightX * hotY * 0.90);
+                // Hot intense ember right at the horizon line
+                vec3 emberHot = vec3(0.96, 0.36, 0.08);
+                float hotY = pow(1.0 - smoothstep(0.0, 0.12, y), 1.6);
+                base = mix(base, emberHot, rightX * hotY * 0.92);
 
-                // Mid orange bleed reaching up toward cloud bases
-                vec3 emberMid  = vec3(0.52, 0.14, 0.05);
-                float midY = 1.0 - smoothstep(0.08, 0.40, y);
-                base = mix(base, emberMid, rightX * midY * 0.58);
+                // Mid orange bleed reaching up into the cloud bases
+                vec3 emberMid = vec3(0.62, 0.18, 0.06);
+                float midY = 1.0 - smoothstep(0.06, 0.34, y);
+                base = mix(base, emberMid, rightX * midY * 0.65);
 
-                // Faint red underbelly higher up — clouds catching the firelight
-                vec3 cloudBelly = vec3(0.22, 0.08, 0.06);
-                float bellyY = smoothstep(0.18, 0.40, y) * (1.0 - smoothstep(0.40, 0.70, y));
-                base = mix(base, cloudBelly, rightX * bellyY * 0.45);
+                // Faint orange-red staining the underside of higher clouds —
+                // modulated by the cloud noise so it pools where clouds are
+                // denser and feels like firelight catching uneven cloud bases.
+                vec3 belly = vec3(0.30, 0.10, 0.07);
+                float bellyY = smoothstep(0.18, 0.42, y) * (1.0 - smoothstep(0.42, 0.68, y));
+                float bellyMod = 0.65 + cloudCoarse * 0.5;
+                base = mix(base, belly, rightX * bellyY * 0.55 * bellyMod);
 
                 gl_FragColor = vec4(base, 1.0);
             }
@@ -1627,8 +1684,11 @@ themeToggle?.addEventListener('click', () => {
         return tex;
     }
 
+    // RepeatWrapping + scrollSpeed lets these inner-mountain mist layers drift
+    // right-to-left like the rolling fog above. The ground-blend texture has
+    // alpha-fade horizontal edges baked in, so tile boundaries are seamless.
     const groundBlendTex = makeGroundBlendTexture();
-    groundBlendTex.wrapS = THREE.ClampToEdgeWrapping;
+    groundBlendTex.wrapS = THREE.RepeatWrapping;
     groundBlendTex.wrapT = THREE.ClampToEdgeWrapping;
     const groundBlendMat = new THREE.MeshBasicMaterial({
         map: groundBlendTex,
@@ -1639,10 +1699,11 @@ themeToggle?.addEventListener('click', () => {
     });
     const groundBlend = new THREE.Mesh(new THREE.PlaneGeometry(120, 6.6), groundBlendMat);
     groundBlend.position.set(0, -2.95, -29.5);
+    groundBlend.userData = { scrollSpeed: 0.0070 };
     scene.add(groundBlend);
 
     const groundBlendTex2 = makeGroundBlendTexture();
-    groundBlendTex2.wrapS = THREE.ClampToEdgeWrapping;
+    groundBlendTex2.wrapS = THREE.RepeatWrapping;
     groundBlendTex2.wrapT = THREE.ClampToEdgeWrapping;
     const groundBlendBack = new THREE.Mesh(
         new THREE.PlaneGeometry(110, 5.6),
@@ -1655,15 +1716,18 @@ themeToggle?.addEventListener('click', () => {
         })
     );
     groundBlendBack.position.set(3, -2.80, -34.0);
+    groundBlendBack.userData = { scrollSpeed: 0.0048 };
     scene.add(groundBlendBack);
 
     const mountainWisps = [
-        { x: -13, y: -2.55, z: -30, w: 28, h: 3.8, opacity: 0.20, speed: 0.040, phase: 0.0 },
-        { x: 4,   y: -2.80, z: -33, w: 34, h: 3.6, opacity: 0.18, speed: 0.032, phase: 1.7 },
-        { x: 19,  y: -2.50, z: -36, w: 26, h: 4.0, opacity: 0.22, speed: 0.046, phase: 3.1 },
+        // Left wisp sits just behind Gandalf — bumped opacity so the smoke
+        // gusts on his side of the frame read clearly.
+        { x: -13, y: -2.55, z: -30, w: 28, h: 3.8, opacity: 0.42, scrollSpeed: 0.0080, phase: 0.0 },
+        { x: 4,   y: -2.80, z: -33, w: 34, h: 3.6, opacity: 0.32, scrollSpeed: 0.0058, phase: 1.7 },
+        { x: 19,  y: -2.50, z: -36, w: 26, h: 4.0, opacity: 0.34, scrollSpeed: 0.0095, phase: 3.1 },
     ].map((cfg) => {
         const tex = makeGroundBlendTexture();
-        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.ClampToEdgeWrapping;
         const mesh = new THREE.Mesh(
             new THREE.PlaneGeometry(cfg.w, cfg.h),
@@ -1767,9 +1831,10 @@ themeToggle?.addEventListener('click', () => {
         // Mid bank wrapping mid-range bases — denser, the "valley fog" that fills the
         // gap between the front foothills and the receding ranges behind.
         { y: -2.3, z: -27, w: 130, h:  9.5, repeats: 2.1, opacity: 0.70, scrollSpeed: 0.0062, pulsePeriod: 11.0, pulseAmp: 0.22, phase: 1.6, seed: 23 },
-        // High wispy tendrils above the mid-range peaks — sparse, slightly faster
-        // than the heavy banks below to suggest higher-altitude air movement.
-        { y:  0.4, z: -25, w: 130, h:  8.0, repeats: 2.8, opacity: 0.34, scrollSpeed: 0.0055, pulsePeriod: 13.0, pulseAmp: 0.16, phase: 3.1, seed: 53 },
+        // High wispy tendrils above the mid-range peaks — wind-driven smoke
+        // streaks at Gandalf's altitude. Stronger opacity + larger pulse so the
+        // peaks of the gusts read clearly against the dark sky.
+        { y:  0.4, z: -25, w: 130, h:  8.0, repeats: 2.8, opacity: 0.62, scrollSpeed: 0.0055, pulsePeriod: 13.0, pulseAmp: 0.22, phase: 3.1, seed: 53 },
         // Densest foothill mist — sits exactly at the grass-meets-mountain line so it
         // softens that junction and partially swallows the foothill bases.
         { y: -2.80, z: -22, w: 105, h: 6.8, repeats: 1.9, opacity: 0.78, scrollSpeed: 0.0090, pulsePeriod:  9.5, pulseAmp: 0.22, phase: 2.3, seed: 37 },
@@ -1784,13 +1849,6 @@ themeToggle?.addEventListener('click', () => {
         { y: -2.78, z: -28, w: 140, h: 2.6, repeats: 4.2, opacity: 0.55, scrollSpeed: 0.0085, pulsePeriod: 7.2, pulseAmp: 0.18, phase: 0.9, seed: 89 },
         { y: -2.85, z: -24, w: 120, h: 2.2, repeats: 3.8, opacity: 0.50, scrollSpeed: 0.0110, pulsePeriod: 6.4, pulseAmp: 0.16, phase: 4.2, seed: 97 },
         { y: -3.45, z: -20.5, w: 100, h: 1.8, repeats: 4.6, opacity: 0.45, scrollSpeed: 0.0150, pulsePeriod: 5.6, pulseAmp: 0.14, phase: 2.7, seed: 103 },
-
-        // Barad-dûr halo fog — localized banks centered on the tower (x≈23) to
-        // thicken the mist around the right side without affecting the rest of
-        // the scene. A taller bank wraps the tower's base and a low wisp drifts
-        // in front of it so the tower periodically dims behind passing fog.
-        { x: 22, y: -1.9, z: -27, w: 46, h: 9.5, repeats: 1.5, opacity: 0.62, scrollSpeed: 0.0058, pulsePeriod: 12.5, pulseAmp: 0.20, phase: 1.2, seed: 131 },
-        { x: 23, y: -2.55, z: -22, w: 36, h: 4.6, repeats: 1.8, opacity: 0.60, scrollSpeed: 0.0098, pulsePeriod:  8.6, pulseAmp: 0.18, phase: 3.4, seed: 137 },
     ];
 
     const rollingFogLayers = rollingFogSpecs.map((cfg) => {
@@ -2415,17 +2473,20 @@ themeToggle?.addEventListener('click', () => {
             if (c.position.x > 12) c.position.x = -12;
         }
 
-        // Low fog drift: slow opposing texture scrolls and breathy opacity so the foothills feel alive.
-        groundBlend.position.x = Math.sin(elapsed * 0.08) * 0.9;
+        // Inner-mountain fog drift — texture.offset.x scrolls each layer right
+        // to left at its own rate so the haze between mountain ranges feels
+        // alive instead of static. Subtle vertical bob + opacity breath are
+        // kept on top of the scroll to add per-layer character.
+        groundBlend.material.map.offset.x = elapsed * groundBlend.userData.scrollSpeed;
         groundBlend.position.y = -2.95 + Math.sin(elapsed * 0.17) * 0.045;
         groundBlend.material.opacity = 0.72 + Math.sin(elapsed * 0.22) * 0.08;
-        groundBlendBack.position.x = 3 + Math.sin(elapsed * 0.11 + 1.7) * 1.2;
+        groundBlendBack.material.map.offset.x = elapsed * groundBlendBack.userData.scrollSpeed;
         groundBlendBack.position.y = -2.80 + Math.sin(elapsed * 0.19 + 0.8) * 0.05;
         groundBlendBack.material.opacity = 0.42 + Math.sin(elapsed * 0.28 + 1.2) * 0.09;
         mistPlane.position.x = Math.sin(elapsed * 0.06 + 0.4) * 1.6;
         for (const wisp of mountainWisps) {
             const cfg = wisp.userData;
-            wisp.position.x = cfg.x + Math.sin(elapsed * 0.10 + cfg.phase) * 1.1;
+            wisp.material.map.offset.x = elapsed * cfg.scrollSpeed;
             wisp.position.y = cfg.y + Math.sin(elapsed * 0.16 + cfg.phase) * 0.08;
             wisp.material.opacity = cfg.opacity + Math.sin(elapsed * 0.24 + cfg.phase) * 0.08;
         }

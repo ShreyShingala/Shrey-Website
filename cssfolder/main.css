@@ -124,8 +124,26 @@ body.light-mode .hero > .divider {
 /* Light-mode page theming (additive — applies in addition to default styling) */
 body.light-mode {
     background: #f0ebe0;
-    color: #2c1f0e;
+    color: #e8d5a0;
     overflow-x: hidden;
+}
+
+/* Hero text overrides for the dark Mordor sky behind the hero — warm cream
+   so the name, subtitle and buttons stay legible against deep storm tones.
+   Section content below the hero sets its own explicit colors so it is
+   unaffected. The navbar keeps its original dark text on cream so it stays
+   legible against the cream nav background. */
+body.light-mode .subtitle {
+    color: #c8b888;
+}
+body.light-mode .links a {
+    color: #c8b888;
+    border-color: rgba(200, 184, 136, 0.45);
+}
+body.light-mode .links a:hover {
+    color: #e8d5a0;
+    border-color: rgba(232, 213, 160, 0.7);
+    background: rgba(232, 213, 160, 0.06);
 }
 
 /* ---- Light-mode scroll curtain ---- */
