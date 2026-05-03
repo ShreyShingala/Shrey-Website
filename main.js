@@ -1452,7 +1452,7 @@ themeToggle?.addEventListener('click', () => {
                     
                     // Wider, lower Gaussian shoulders soften the peaks behind the tower.
                     const leftPeak = Math.exp(-Math.pow(dx + 4.4, 2) / 8.0) * 0.72;
-                    const rightPeak = Math.exp(-Math.pow(dx - 4.6, 2) / 8.5) * 0.62;
+                    const rightPeak = Math.exp(-Math.pow(dx - 4.6, 2) / 8.5) * 0.45;
                     
                     h += (leftPeak + rightPeak) * spec.peakScale;
                     
@@ -1871,42 +1871,50 @@ themeToggle?.addEventListener('click', () => {
     const newDarkMat = () => new THREE.MeshBasicMaterial({ color: towerColor, fog: false });
 
     // Tier 1 — slimmer base, tapers in
-    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.48, 0.50, 16), newDarkMat());
-    tBase.position.y = 0.25;
+    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.191, 0.306, 0.38, 16), newDarkMat());
+    tBase.position.y = 0.19;
     baraddur.add(tBase);
-    // Tier 2 — bottom 0.36 overhangs tier 1's top 0.30 (small ledge), tapers to 0.24
-    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.36, 0.40, 16), newDarkMat());
-    tMid.position.y = 0.70;
+    // Tier 2 — bottom 0.230 overhangs tier 1's top 0.191 (small ledge), tapers to 0.153
+    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.153, 0.230, 0.30, 16), newDarkMat());
+    tMid.position.y = 0.53;
     baraddur.add(tMid);
-    // Tier 3 — bottom 0.30 overhangs tier 2's top 0.24, tapers to 0.20
-    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.30, 0.35, 16), newDarkMat());
-    tUpper.position.y = 1.075;
+    // Tier 3 — bottom 0.191 overhangs tier 2's top 0.153, tapers to 0.128
+    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.128, 0.191, 0.26, 16), newDarkMat());
+    tUpper.position.y = 0.81;
     baraddur.add(tUpper);
     // Crown platform — flares well wider than upper tier's top so the eye fits inside it
     // and the prongs can sit on its outer edge instead of clustered in the center.
-    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 0.10, 16), newDarkMat());
-    tCrown.position.y = 1.30;
+    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.268, 0.204, 0.08, 16), newDarkMat());
+    tCrown.position.y = 0.98;
     baraddur.add(tCrown);
 
-    // C-shaped prongs — quarter-arc TubeGeometry that sweeps from straight-up at the crown
-    // edge to pointing-outward at the tip, all in one smooth curve.
-    class ProngCurve extends THREE.Curve {
-        constructor(radius, side) { super(); this.radius = radius; this.side = side; }
+    // Thin, elegant prongs inspired by dark mode
+    class ThinProngProfile extends THREE.Curve {
+        constructor() { super(); }
         getPoint(t, target = new THREE.Vector3()) {
-            const a = t * Math.PI / 2;
+            const taper = Math.pow(1 - t, 0.8);
+            const w = 0.025 * taper;
+            return target.set(w, t * 0.20, 0);
+        }
+    }
+    
+    // Curved path for prong — extends outward first, then up
+    class ThinProngCurve extends THREE.Curve {
+        constructor(side) { super(); this.side = side; }
+        getPoint(t, target = new THREE.Vector3()) {
+            const r = 0.09;
             return target.set(
-                this.side * this.radius * (1 - Math.cos(a)),
-                this.radius * Math.sin(a),
+                this.side * r * Math.sin(t * Math.PI / 2),
+                r * t * t,
                 0
             );
         }
     }
-    const prongRadius = 0.18;
+    
     for (const side of [-1, 1]) {
-        const prongGeo = new THREE.TubeGeometry(new ProngCurve(prongRadius, side), 14, 0.038, 8, false);
+        const prongGeo = new THREE.TubeGeometry(new ThinProngCurve(side), 16, 0.018, 6, false);
         const prong = new THREE.Mesh(prongGeo, newDarkMat());
-        // Anchor the curve start at the outer edge of the crown's top (radius 0.42), y at crown top.
-        prong.position.set(side * 0.40, 1.35, 0);
+        prong.position.set(side * 0.25, 1.02, 0);
         baraddur.add(prong);
     }
 
@@ -1977,7 +1985,7 @@ themeToggle?.addEventListener('click', () => {
     });
     // Eye fits INSIDE the crown — width 0.70 < crown top diameter 0.84, between prongs at ±0.40.
     const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.70, 0.22), eyeMat);
-    eye.position.set(0, 1.45, -0.04);
+    eye.position.set(0.025, 1.11, -0.04);
     baraddur.add(eye);
 
     // Ember at the eye — tight 1.2 distance so it doesn't paint the whole tower red
