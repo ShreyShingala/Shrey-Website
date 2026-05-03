@@ -1423,7 +1423,7 @@ themeToggle?.addEventListener('click', () => {
         // Distant Range
         { z: -40,  color: '#9aafc0', opacity: 0.8,  seed: 23, y: -2.0, peakScale: 4.0, w: 160, freq: 6.0 },
         // Mid Range
-        { z: -30,  color: '#849aab', opacity: 0.95, seed: 37, y: -2.5, peakScale: 3.0, w: 120, freq: 7.0 },
+        { z: -30,  color: '#849aab', opacity: 1.0, seed: 37, y: -2.5, peakScale: 3.0, w: 120, freq: 7.0 },
         // Front Foothills
         { z: -20,  color: '#6a8090', opacity: 1.0,  seed: 42, y: -3.0, peakScale: 2.0, w: 90,  freq: 8.0 },
         // Baby Foothills (Aligned with Front Foothills)
@@ -1442,7 +1442,27 @@ themeToggle?.addEventListener('click', () => {
             const ly = pos.getY(i);
             if (ly > 0) { // Displace only the top row
                 const nx = (lx + spec.w / 2) / spec.w;
-                const h = ridgedNoise(nx * spec.freq, spec.seed) * spec.peakScale;
+                let h = ridgedNoise(nx * spec.freq, spec.seed) * spec.peakScale;
+
+                // Frame Barad-dûr with broad, misty shoulders and a modest saddle.
+                // Keep this softer than the surrounding procedural ridges so the
+                // tower reads as distant and embedded, not cut out of the mountain.
+                if (layerIdx >= 2 && layerIdx <= 5) {
+                    const dx = lx - 23.0; // Tower X is 23.0
+                    
+                    // Wider, lower Gaussian shoulders soften the peaks behind the tower.
+                    const leftPeak = Math.exp(-Math.pow(dx + 4.4, 2) / 8.0) * 0.72;
+                    const rightPeak = Math.exp(-Math.pow(dx - 4.6, 2) / 8.5) * 0.62;
+                    
+                    h += (leftPeak + rightPeak) * spec.peakScale;
+                    
+                    // A shallow saddle hides the base without exposing black tower fragments.
+                    const valleyCut = Math.exp(-Math.pow(dx, 2) / 7.0);
+                    const valleyTarget = 0.58 * spec.peakScale;
+                    const blend = valleyCut * (layerIdx === 5 ? 0.58 : 0.38);
+                    h = h * (1.0 - blend) + valleyTarget * blend;
+                }
+
                 pos.setY(i, ly + h);
                 if (layerIdx === 5) { // Update index for mid-range
                     topYs.push({ x: lx, y: spec.y + ly + h });
@@ -1487,8 +1507,8 @@ themeToggle?.addEventListener('click', () => {
         const g = c.getContext('2d');
         const grad = g.createLinearGradient(0, 0, 0, 128);
         grad.addColorStop(0,    'rgba(106, 128, 144, 0.0)');
-        grad.addColorStop(0.45, 'rgba(106, 128, 144, 0.6)');
-        grad.addColorStop(0.55, 'rgba(106, 128, 144, 0.6)');
+        grad.addColorStop(0.45, 'rgba(106, 128, 144, 0.44)');
+        grad.addColorStop(0.55, 'rgba(106, 128, 144, 0.44)');
         grad.addColorStop(1,    'rgba(106, 128, 144, 0.0)');
         g.fillStyle = grad;
         g.fillRect(0, 0, 1024, 128);
@@ -1497,7 +1517,7 @@ themeToggle?.addEventListener('click', () => {
             const cx = 100 + (i / 6) * 824;
             const r = 90 + (i % 3) * 30;
             const rg = g.createRadialGradient(cx, 64, 4, cx, 64, r);
-            rg.addColorStop(0, 'rgba(106, 128, 144, 0.25)');
+            rg.addColorStop(0, 'rgba(106, 128, 144, 0.20)');
             rg.addColorStop(1, 'rgba(106, 128, 144, 0)');
             g.fillStyle = rg;
             g.fillRect(0, 0, 1024, 128);
@@ -1506,16 +1526,118 @@ themeToggle?.addEventListener('click', () => {
         tex.needsUpdate = true;
         return tex;
     }
-    const mistGeo = new THREE.PlaneGeometry(600, 100);
+    const mistGeo = new THREE.PlaneGeometry(220, 26);
     const mistMat = new THREE.MeshBasicMaterial({
         map: makeValleyMistTexture(),
         transparent: true,
+        opacity: 0.86,
         depthWrite: false,
     });
     const mistPlane = new THREE.Mesh(mistGeo, mistMat);
     mistPlane.rotation.x = -Math.PI / 2;
-    mistPlane.position.set(0, -5.2, -20); // Hovers slightly over the valley, centered at mountain base
+    mistPlane.position.set(0, -3.15, -36); // Constrained to mountain depth only
     scene.add(mistPlane);
+
+    // ----- Low foothill haze — softens the grass-to-mountain meeting line -----
+    function makeGroundBlendTexture() {
+        const c = document.createElement('canvas');
+        c.width = 1024; c.height = 256;
+        const g = c.getContext('2d');
+
+        const vertical = g.createLinearGradient(0, 0, 0, 256);
+        vertical.addColorStop(0.00, 'rgba(96, 116, 104, 0)');
+        vertical.addColorStop(0.18, 'rgba(146, 164, 150, 0.22)');
+        vertical.addColorStop(0.40, 'rgba(124, 146, 128, 0.52)');
+        vertical.addColorStop(0.58, 'rgba(104, 128, 112, 0.58)');
+        vertical.addColorStop(0.78, 'rgba(84, 104, 90, 0.30)');
+        vertical.addColorStop(1.00, 'rgba(66, 76, 66, 0)');
+        g.fillStyle = vertical;
+        g.fillRect(0, 0, 1024, 256);
+
+        for (let i = 0; i < 18; i++) {
+            const cx = 40 + i * 88 + Math.sin(i * 2.1) * 28;
+            const cy = 86 + Math.sin(i * 1.7) * 48;
+            const rx = 150 + Math.sin(i * 3.4) * 44;
+            const ry = 50 + Math.cos(i * 2.9) * 18;
+            const blob = g.createRadialGradient(cx, cy, 4, cx, cy, rx);
+            blob.addColorStop(0, 'rgba(182, 204, 188, 0.18)');
+            blob.addColorStop(0.45, 'rgba(142, 166, 148, 0.10)');
+            blob.addColorStop(1, 'rgba(190, 204, 210, 0)');
+            g.fillStyle = blob;
+            g.beginPath();
+            g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            g.fill();
+        }
+
+        // Feather the texture horizontally so animated fog planes never reveal a hard rectangular end.
+        g.globalCompositeOperation = 'destination-in';
+        const edgeFade = g.createLinearGradient(0, 0, 1024, 0);
+        edgeFade.addColorStop(0.00, 'rgba(0,0,0,0)');
+        edgeFade.addColorStop(0.08, 'rgba(0,0,0,1)');
+        edgeFade.addColorStop(0.92, 'rgba(0,0,0,1)');
+        edgeFade.addColorStop(1.00, 'rgba(0,0,0,0)');
+        g.fillStyle = edgeFade;
+        g.fillRect(0, 0, 1024, 256);
+        g.globalCompositeOperation = 'source-over';
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const groundBlendTex = makeGroundBlendTexture();
+    groundBlendTex.wrapS = THREE.ClampToEdgeWrapping;
+    groundBlendTex.wrapT = THREE.ClampToEdgeWrapping;
+    const groundBlendMat = new THREE.MeshBasicMaterial({
+        map: groundBlendTex,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false,
+        fog: false,
+    });
+    const groundBlend = new THREE.Mesh(new THREE.PlaneGeometry(120, 6.6), groundBlendMat);
+    groundBlend.position.set(0, -2.95, -29.5);
+    scene.add(groundBlend);
+
+    const groundBlendTex2 = makeGroundBlendTexture();
+    groundBlendTex2.wrapS = THREE.ClampToEdgeWrapping;
+    groundBlendTex2.wrapT = THREE.ClampToEdgeWrapping;
+    const groundBlendBack = new THREE.Mesh(
+        new THREE.PlaneGeometry(110, 5.6),
+        new THREE.MeshBasicMaterial({
+            map: groundBlendTex2,
+            transparent: true,
+            opacity: 0.48,
+            depthWrite: false,
+            fog: false,
+        })
+    );
+    groundBlendBack.position.set(3, -2.80, -34.0);
+    scene.add(groundBlendBack);
+
+    const mountainWisps = [
+        { x: -13, y: -2.55, z: -30, w: 28, h: 3.8, opacity: 0.20, speed: 0.040, phase: 0.0 },
+        { x: 4,   y: -2.80, z: -33, w: 34, h: 3.6, opacity: 0.18, speed: 0.032, phase: 1.7 },
+        { x: 19,  y: -2.50, z: -36, w: 26, h: 4.0, opacity: 0.22, speed: 0.046, phase: 3.1 },
+    ].map((cfg) => {
+        const tex = makeGroundBlendTexture();
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(cfg.w, cfg.h),
+            new THREE.MeshBasicMaterial({
+                map: tex,
+                transparent: true,
+                opacity: cfg.opacity,
+                depthWrite: false,
+                fog: false,
+            })
+        );
+        mesh.position.set(cfg.x, cfg.y, cfg.z);
+        mesh.userData = { ...cfg, tex };
+        scene.add(mesh);
+        return mesh;
+    });
 
     // ----- Snowy mountain top we're standing on — plateau extends across left + bottom -----
     // The white plateau extends FAR left and FAR toward the camera (off-screen on those
@@ -1526,18 +1648,20 @@ themeToggle?.addEventListener('click', () => {
     {
         const pos = cliffGeo.attributes.position;
         const colors = new Float32Array(pos.count * 3);
-        const cornice  = new THREE.Color('#e8eef0');
-        const rockMid  = new THREE.Color('#3a4250');
+        const cornice  = new THREE.Color('#edf2f2');
+        const snowBlue = new THREE.Color('#cfd9db');
+        const rockMid  = new THREE.Color('#4d5660');
+        const rockDark = new THREE.Color('#323a42');
         const rockDeep = new THREE.Color('#424c42'); // matches new grass tone — cliff base blends in
-        const PEAK_RISE  = 4.7;
-        const OUTER_DROP = -8.0;     // → world Y = -13.78, cliff face plunges all the way down
+        const PEAK_RISE  = 5.25;
+        const OUTER_DROP = -7.35;    // deep enough to fall out of frame without reading as a slab
 
         // Plateau half-extents and falloff widths (asymmetric).
         // The visible cliff face is only on the right just past Gandalf — every other
         // side extends far enough that the plane edges are off-screen.
-        const HX_RIGHT_BASE = 0.9, FX_RIGHT = 1.6;  // visible rocky face, near-vertical end
+        const HX_RIGHT_BASE = 1.15, FX_RIGHT = 2.55; // wider eroded roll-off, less wall-like
         const HX_LEFT  = 12.0, FX_LEFT  = 2.5;       // plateau extends way left, off-screen
-        const HY_BACK  = 3.2, FY_BACK  = 1.2;        // back drop also goes near-vertical
+        const HY_BACK  = 3.6, FY_BACK  = 1.8;        // softer back lip
         const HY_FRONT = 9.0, FY_FRONT = 2.5;        // plateau extends way to camera, off-screen
 
         for (let i = 0; i < pos.count; i++) {
@@ -1546,9 +1670,11 @@ themeToggle?.addEventListener('click', () => {
             const dx = lx;
             const dy = ly - 0.5;
 
-            // Right edge undulates as we sweep through dy: out → in → out → tapers down.
-            // Sine wave along depth gives a smooth backwards-S shape to the right boundary.
-            const rightWave = Math.sin((dy + 0.4) * 2.2) * 0.45;
+            // Right edge erodes in several broad waves instead of forming one cut-out slab.
+            const rightWave =
+                Math.sin((dy + 0.4) * 1.35) * 0.42 +
+                Math.sin(dy * 2.75 - 0.7) * 0.18 +
+                Math.sin(dy * 5.1 + 1.4) * 0.08;
             const HX_RIGHT = HX_RIGHT_BASE + rightWave;
 
             const HX = dx > 0 ? HX_RIGHT : HX_LEFT;
@@ -1561,31 +1687,41 @@ themeToggle?.addEventListener('click', () => {
             const ay = Math.max(0, (Math.abs(dy) - HY) / FY);
             const distOut = Math.sqrt(ax * ax + ay * ay);
 
-            // Bell: flat 1 inside plateau, smoothstep down to 0 at distOut=1
+            // Bell: flat 1 inside plateau, smoother roll down to 0 at distOut=1.
             let bell;
             if (distOut <= 0)        bell = 1;
             else if (distOut >= 1)   bell = 0;
-            else                     bell = 1 - (distOut * distOut * (3 - 2 * distOut));
+            else {
+                const s = distOut * distOut * distOut * (distOut * (distOut * 6 - 15) + 10);
+                bell = 1 - s;
+            }
 
             // Subtle fluctuations on the cliff face (mid-bell band only)
-            const cliffBand = Math.exp(-Math.pow((bell - 0.55) * 3.2, 2));
+            const cliffBand = Math.exp(-Math.pow((bell - 0.48) * 2.7, 2));
             const fluctuation = (
-                  Math.sin(lx * 2.1 + ly * 1.5) * 0.40
-                + Math.sin(ly * 3.5 - lx * 2.2) * 0.15
-                + Math.sin(lx * 5.1 - ly * 3.1) * 0.08
+                  Math.sin(lx * 1.65 + ly * 1.20) * 0.34
+                + Math.sin(ly * 2.40 - lx * 1.90) * 0.20
+                + Math.sin(lx * 4.30 - ly * 2.80) * 0.08
             ) * cliffBand;
+            const windScoop = Math.max(0, dx - HX_RIGHT + 0.25) * Math.max(0, 1 - Math.abs(dy + 0.8) / 4.5) * 0.18;
 
-            const h = OUTER_DROP + (PEAK_RISE - OUTER_DROP) * bell + fluctuation;
+            const h = OUTER_DROP + (PEAK_RISE - OUTER_DROP) * bell + fluctuation - windScoop;
             pos.setZ(i, h);
 
             const t = 1 - bell;
-            // Use rock face bumps (fluctuation) to break up the snow line organically,
-            // making snow cling to peaks and fall off in crevices.
-            const colorT = Math.max(0, Math.min(1, t - fluctuation * 0.3));
+            const snowPatch = (
+                Math.sin(lx * 2.4 + ly * 0.9) * 0.08 +
+                Math.sin(lx * 6.0 - ly * 2.2) * 0.04
+            ) * (1 - Math.min(1, t * 1.6));
+            const colorT = Math.max(0, Math.min(1, t - fluctuation * 0.22 - snowPatch));
+            const strata = Math.max(0, Math.min(1,
+                (Math.sin((ly + h) * 5.2 + lx * 1.1) * 0.5 + 0.5) * cliffBand
+            ));
             
             const c = cornice.clone()
-                // Sharpen the snow transition (colorT * 2.5) so it doesn't form a wide blurry ribbon
-                .lerp(rockMid,  Math.min(1, colorT * 2.5))
+                .lerp(snowBlue, Math.min(1, colorT * 1.1))
+                .lerp(rockMid,  Math.min(1, Math.max(0, colorT - 0.18) * 1.9))
+                .lerp(rockDark, Math.max(0, colorT - 0.34) * strata * 0.35)
                 .lerp(rockDeep, Math.max(0, (colorT - 0.5) / 0.5) * 0.85);
             colors[i * 3]     = c.r;
             colors[i * 3 + 1] = c.g;
@@ -1602,6 +1738,39 @@ themeToggle?.addEventListener('click', () => {
     cliff.rotation.x = -Math.PI / 2;
     // Plateau (h = PEAK_RISE = 4.7) sits at world Y = -5.78 + 4.7 = -1.08 — Gandalf's feet.
     cliff.position.set(-2.6, -5.78, -2.0);
+
+    function addCliffContour(dropT, widthOffset, opacity) {
+        const pts = [];
+        for (let i = 0; i <= 72; i++) {
+            const ly = -4.0 + (i / 72) * 8.0;
+            const dy = ly - 0.5;
+            const edge =
+                1.15 +
+                Math.sin((dy + 0.4) * 1.35) * 0.42 +
+                Math.sin(dy * 2.75 - 0.7) * 0.18 +
+                Math.sin(dy * 5.1 + 1.4) * 0.08;
+            const x = edge + widthOffset + Math.sin(ly * 2.8 + dropT * 4.0) * 0.055;
+            const z = 4.7 + (-7.35 - 4.7) * dropT
+                + Math.sin(ly * 1.7 + dropT * 3.2) * 0.18
+                + 0.055;
+            pts.push(new THREE.Vector3(x, ly, z));
+        }
+        const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({
+                color: 0x2f3940,
+                transparent: true,
+                opacity,
+                depthWrite: false,
+                fog: true,
+            })
+        );
+        cliff.add(line);
+    }
+    addCliffContour(0.18, 0.05, 0.42);
+    addCliffContour(0.36, 0.18, 0.36);
+    addCliffContour(0.56, 0.30, 0.30);
+    addCliffContour(0.74, 0.42, 0.24);
     scene.add(cliff);
 
     // ----- Terrain height lookup -----
@@ -1690,77 +1859,136 @@ themeToggle?.addEventListener('click', () => {
     }
 
     // ----- Barad-dûr — sits on the mountains on the right. MeshBasicMaterial = unlit, always dark.
-    // Positioned in a gap in the Mid Range mountains so it feels discovered
-    const baraddurPos = { x: 16.0, y: -3.5, z: -30.5 };
+    // Smooth 3-tier fortress with subtle overhang ledges; wide crown platform hosts the eye
+    // and lets thin prongs sit on its outer edge.
+    // x shifted left from 22.9 so the tower aligns with the saddle's higher (left) peak,
+    // which hides the right-side base from poking out of the mountain. z pushed deeper for
+    // the same reason. (See mountain-shoulder code: leftPeak amp 0.72 > rightPeak amp 0.62.)
+    const baraddurPos = { x: 22.4, y: -0.6, z: -31.0 };
     const baraddurScale = 2.0;
     const baraddur = new THREE.Group();
-    // Each part gets its OWN MeshBasicMaterial — fully ignores all scene lighting.
     const towerColor = 0x000000;
     const newDarkMat = () => new THREE.MeshBasicMaterial({ color: towerColor, fog: false });
 
-    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 0.85, 8), newDarkMat());
-    tBase.position.y = 0.425;
+    // Tier 1 — slimmer base, tapers in
+    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.48, 0.50, 16), newDarkMat());
+    tBase.position.y = 0.25;
     baraddur.add(tBase);
-    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.30, 0.95, 8), newDarkMat());
-    tMid.position.y = 1.32;
+    // Tier 2 — bottom 0.36 overhangs tier 1's top 0.30 (small ledge), tapers to 0.24
+    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.36, 0.40, 16), newDarkMat());
+    tMid.position.y = 0.70;
     baraddur.add(tMid);
-    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.7, 8), newDarkMat());
-    tUpper.position.y = 2.14;
+    // Tier 3 — bottom 0.30 overhangs tier 2's top 0.24, tapers to 0.20
+    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.30, 0.35, 16), newDarkMat());
+    tUpper.position.y = 1.075;
     baraddur.add(tUpper);
-    const tCrownBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 8), newDarkMat());
-    tCrownBase.position.y = 2.55;
-    baraddur.add(tCrownBase);
+    // Crown platform — flares well wider than upper tier's top so the eye fits inside it
+    // and the prongs can sit on its outer edge instead of clustered in the center.
+    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 0.10, 16), newDarkMat());
+    tCrown.position.y = 1.30;
+    baraddur.add(tCrown);
 
-    const prongCount = 2;
-    for (let i = 0; i < prongCount; i++) {
-        // Place exactly two prongs on the left and right sides (X axis) to cradle the eye, avoiding any center overlap.
-        const a = i * Math.PI;
-        const prong = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.32, 4), newDarkMat());
-        prong.position.set(Math.cos(a) * 0.13, 2.77, Math.sin(a) * 0.13);
+    // C-shaped prongs — quarter-arc TubeGeometry that sweeps from straight-up at the crown
+    // edge to pointing-outward at the tip, all in one smooth curve.
+    class ProngCurve extends THREE.Curve {
+        constructor(radius, side) { super(); this.radius = radius; this.side = side; }
+        getPoint(t, target = new THREE.Vector3()) {
+            const a = t * Math.PI / 2;
+            return target.set(
+                this.side * this.radius * (1 - Math.cos(a)),
+                this.radius * Math.sin(a),
+                0
+            );
+        }
+    }
+    const prongRadius = 0.18;
+    for (const side of [-1, 1]) {
+        const prongGeo = new THREE.TubeGeometry(new ProngCurve(prongRadius, side), 14, 0.038, 8, false);
+        const prong = new THREE.Mesh(prongGeo, newDarkMat());
+        // Anchor the curve start at the outer edge of the crown's top (radius 0.42), y at crown top.
+        prong.position.set(side * 0.40, 1.35, 0);
         baraddur.add(prong);
     }
 
-    // Eye of Sauron replacing the center spire
-    const eyeGeo = new THREE.SphereGeometry(0.08, 8, 8);
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff6600 }); // Fiery orange
-    const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.scale.set(1.5, 0.4, 1.0); // Squished wide like an eye
-    eye.position.y = 2.85; // Nestled between the prongs
-    baraddur.add(eye);
-
-    // Ember at the tip — tight 1.2 distance so it doesn't paint the whole tower red
-    const emberLight = new THREE.PointLight(0xff2200, 2.0, 1.2);
-    emberLight.position.y = 2.95;
-    baraddur.add(emberLight);
-
-    baraddur.position.set(baraddurPos.x, baraddurPos.y, baraddurPos.z);
-    // Stretch to be tall and thin like a needle
-    baraddur.scale.set(baraddurScale * 0.6, baraddurScale * 1.5, baraddurScale * 0.6);
-    scene.add(baraddur);
-
-    // Tight red haze directly around the base where it meets the mountain
-    function makeRedHazeTexture() {
+    // Eye of Sauron — PlaneGeometry sprite with hi-res canvas texture
+    function makeTowerEyeTexture() {
         const c = document.createElement('canvas');
-        c.width = 128; c.height = 128;
+        c.width = 512; c.height = 256;
         const g = c.getContext('2d');
-        const grad = g.createRadialGradient(64, 64, 0, 64, 64, 60);
-        grad.addColorStop(0,    'rgba(180, 40, 10, 0.7)'); // Hot core
-        grad.addColorStop(0.3,  'rgba(120, 20, 5, 0.3)');
-        grad.addColorStop(0.6,  'rgba(60, 10, 0, 0.05)');
-        grad.addColorStop(1,    'rgba(0, 0, 0, 0)');
-        g.fillStyle = grad;
-        g.fillRect(0, 0, 128, 128);
+        g.clearRect(0, 0, c.width, c.height);
+
+        const cx = 256, cy = 128;
+        const eyeW = 220, eyeH = 92;
+
+        // Outer fiery halo
+        const outerGlow = g.createRadialGradient(cx, cy, 4, cx, cy, eyeW * 1.25);
+        outerGlow.addColorStop(0.00, 'rgba(255,190,90,0.55)');
+        outerGlow.addColorStop(0.38, 'rgba(225,95,22,0.32)');
+        outerGlow.addColorStop(1.00, 'rgba(60,12,4,0)');
+        g.fillStyle = outerGlow;
+        g.beginPath();
+        g.ellipse(cx, cy, eyeW * 1.12, eyeH * 1.05, 0, 0, Math.PI * 2);
+        g.fill();
+
+        // Almond eye shape (asymmetric bezier above/below for a Sauron tilt)
+        g.beginPath();
+        g.moveTo(cx - eyeW, cy);
+        g.bezierCurveTo(cx - eyeW * 0.55, cy - eyeH * 1.25, cx + eyeW * 0.55, cy - eyeH * 1.05, cx + eyeW, cy);
+        g.bezierCurveTo(cx + eyeW * 0.55, cy + eyeH * 1.18, cx - eyeW * 0.55, cy + eyeH * 1.32, cx - eyeW, cy);
+        g.closePath();
+
+        // Orange iris radial gradient — bright yellow core to deep red rim
+        const irisGrad = g.createRadialGradient(cx, cy, 6, cx, cy, eyeW);
+        irisGrad.addColorStop(0.00, 'rgba(255,240,150,1.0)');
+        irisGrad.addColorStop(0.25, 'rgba(255,170,50,1.0)');
+        irisGrad.addColorStop(0.65, 'rgba(210,60,12,0.97)');
+        irisGrad.addColorStop(1.00, 'rgba(20,6,4,0.97)');
+        g.fillStyle = irisGrad;
+        g.fill();
+
+        // Almond eyelid outline
+        g.lineWidth = 9;
+        g.strokeStyle = 'rgba(14,5,2,0.95)';
+        g.stroke();
+
+        // Vertical slit pupil
+        g.fillStyle = 'rgba(6,1,0,0.99)';
+        g.beginPath();
+        g.ellipse(cx, cy, 9, eyeH * 0.86, 0, 0, Math.PI * 2);
+        g.fill();
+
+        // Catch-light highlight on the iris
+        g.fillStyle = 'rgba(255,240,180,0.42)';
+        g.beginPath();
+        g.ellipse(cx - 30, cy - 18, 20, 10, -0.32, 0, Math.PI * 2);
+        g.fill();
+
         const tex = new THREE.CanvasTexture(c);
         tex.needsUpdate = true;
         return tex;
     }
-    const redHazeMat = new THREE.MeshBasicMaterial({
-        map: makeRedHazeTexture(),
-        transparent: true, opacity: 0.8, depthWrite: false, fog: false,
+
+    const eyeMat = new THREE.MeshBasicMaterial({
+        map: makeTowerEyeTexture(),
+        transparent: true,
+        depthWrite: false,
+        fog: false,
+        side: THREE.DoubleSide,
     });
-    const redHaze = new THREE.Mesh(new THREE.PlaneGeometry(4.0, 3.0), redHazeMat);
-    redHaze.position.set(baraddurPos.x, 0.2, baraddurPos.z - 0.1); 
-    scene.add(redHaze);
+    // Eye fits INSIDE the crown — width 0.70 < crown top diameter 0.84, between prongs at ±0.40.
+    const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.70, 0.22), eyeMat);
+    eye.position.set(0, 1.45, -0.04);
+    baraddur.add(eye);
+
+    // Ember at the eye — tight 1.2 distance so it doesn't paint the whole tower red
+    const emberLight = new THREE.PointLight(0xff2200, 2.0, 1.2);
+    emberLight.position.set(0, 1.45, 0);
+    baraddur.add(emberLight);
+
+    baraddur.position.set(baraddurPos.x, baraddurPos.y, baraddurPos.z);
+    // Thinner fortress proportions — less X/Z scale than before, same Y.
+    baraddur.scale.set(baraddurScale * 0.85, baraddurScale * 1.5, baraddurScale * 0.85);
+    scene.add(baraddur);
 
     // ----- Gandalf billboard — left foreground, standing on the cliff edge -----
     const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
@@ -1780,7 +2008,7 @@ themeToggle?.addEventListener('click', () => {
     // Position: moved even further down and left from the cliff edge
     const gandalfX = -3.9;
     const gandalfZ = -2.5;
-    const gandalfWorldY = -0.75;
+    const gandalfWorldY = 0.05;
     const gandalfBaseY = gandalfWorldY;
     gandalf.position.set(gandalfX, gandalfWorldY, gandalfZ);
     gandalf.rotation.y = 0.0; // facing right toward the tower (back of cloak to camera)
@@ -1811,6 +2039,26 @@ themeToggle?.addEventListener('click', () => {
             c.position.x += 0.00015;
             if (c.position.x > 12) c.position.x = -12;
         }
+
+        // Low fog drift: slow opposing texture scrolls and breathy opacity so the foothills feel alive.
+        groundBlend.position.x = Math.sin(elapsed * 0.08) * 0.9;
+        groundBlend.position.y = -2.95 + Math.sin(elapsed * 0.17) * 0.045;
+        groundBlend.material.opacity = 0.72 + Math.sin(elapsed * 0.22) * 0.08;
+        groundBlendBack.position.x = 3 + Math.sin(elapsed * 0.11 + 1.7) * 1.2;
+        groundBlendBack.position.y = -2.80 + Math.sin(elapsed * 0.19 + 0.8) * 0.05;
+        groundBlendBack.material.opacity = 0.42 + Math.sin(elapsed * 0.28 + 1.2) * 0.09;
+        mistPlane.position.x = Math.sin(elapsed * 0.06 + 0.4) * 1.6;
+        for (const wisp of mountainWisps) {
+            const cfg = wisp.userData;
+            wisp.position.x = cfg.x + Math.sin(elapsed * 0.10 + cfg.phase) * 1.1;
+            wisp.position.y = cfg.y + Math.sin(elapsed * 0.16 + cfg.phase) * 0.08;
+            wisp.material.opacity = cfg.opacity + Math.sin(elapsed * 0.24 + cfg.phase) * 0.08;
+        }
+
+        const eyePulse = (Math.sin(elapsed * 0.8) + 1) * 0.5;
+        const eyeOpacity = 0.7 + eyePulse * 0.3;
+        eyeMat.opacity = eyeOpacity;
+        emberLight.intensity = 1.9 * eyeOpacity;
 
         // Gandalf idle wind sway
         gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
