@@ -1887,9 +1887,9 @@ themeToggle?.addEventListener('click', () => {
     const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.109, 0.162, 0.26, 16), newDarkMat());
     tUpper.position.y = 0.81;
     baraddur.add(tUpper);
-    // Crown platform — flares well wider than upper tier's top so the eye fits inside it
-    // and the prongs can sit on its outer edge instead of clustered in the center.
-    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.228, 0.173, 0.08, 16), newDarkMat());
+    // Crown platform — scaled 0.5x to read as subtle needle top, not torch
+    // Eye fits inside, prongs flare subtly from outer edge.
+    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.114, 0.0865, 0.08, 16), newDarkMat());
     tCrown.position.y = 0.98;
     baraddur.add(tCrown);
 
@@ -1919,7 +1919,7 @@ themeToggle?.addEventListener('click', () => {
     for (const side of [-1, 1]) {
         const prongGeo = new THREE.TubeGeometry(new ThinProngCurve(side), 16, 0.018, 6, false);
         const prong = new THREE.Mesh(prongGeo, newDarkMat());
-        prong.position.set(side * 0.22, 1.02, 0);
+        prong.position.set(side * 0.11, 1.02, 0);
         baraddur.add(prong);
     }
 
@@ -1989,7 +1989,7 @@ themeToggle?.addEventListener('click', () => {
         side: THREE.DoubleSide,
     });
     // Eye fits INSIDE the crown — width 0.70 < crown top diameter 0.84, between prongs at ±0.40.
-    const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.70, 0.22), eyeMat);
+    const eye = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.125), eyeMat);
     eye.position.set(0.025, 1.11, -0.04);
     baraddur.add(eye);
 
