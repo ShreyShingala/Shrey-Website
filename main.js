@@ -1368,33 +1368,52 @@ themeToggle?.addEventListener('click', () => {
                 float y = vUv.y;
                 float x = vUv.x;
 
-                // ----- Vertical gradient: pale gold horizon → steel blue mid → cold deep blue -----
-                vec3 horizonGold = vec3(0.93, 0.88, 0.78); // warm pale gold at horizon
-                vec3 steelBlue   = vec3(0.62, 0.74, 0.86); // clean steel-blue mid sky
-                vec3 coldHigh    = vec3(0.36, 0.50, 0.70); // deeper cold blue up top
+                // ----- Base: oppressive storm sky -----
+                // Upper two-thirds dominated by dark charcoal-purple. The lower
+                // band is only slightly lifted so horizon variations (cold light
+                // on the left, fire on the right) can read clearly against it.
+                vec3 stormTop = vec3(0.045, 0.040, 0.075); // near-black with purple bias
+                vec3 stormMid = vec3(0.110, 0.100, 0.140); // heavy storm grey-purple
+                vec3 stormLow = vec3(0.195, 0.175, 0.220); // slightly lifted base
 
                 vec3 base;
-                if (y < 0.32) {
-                    base = mix(horizonGold, steelBlue, y / 0.32);
+                if (y < 0.35) {
+                    base = mix(stormLow, stormMid, y / 0.35);
                 } else {
-                    base = mix(steelBlue, coldHigh, (y - 0.32) / 0.68);
+                    base = mix(stormMid, stormTop, (y - 0.35) / 0.65);
                 }
 
-                // ----- Left: gentle warm dawn glow -----
-                // Soft gold-white lift on the lower-left horizon — feels like
-                // dawn light on the hopeful side of the frame.
-                vec3 dawnTint = vec3(0.97, 0.92, 0.80);
-                float dawnGlow = smoothstep(0.40, 0.0, x) * smoothstep(0.55, 0.0, y);
-                base = mix(base, dawnTint, dawnGlow * 0.32);
+                // ----- Left: faint cold blue-grey glow -----
+                // A reluctant rim of light along the lower-left horizon — the
+                // last hint of the world outside Mordor's influence. Soft and
+                // strongest right at the horizon, fading up and inward.
+                vec3 hopeTint = vec3(0.62, 0.68, 0.76);
+                float hopeX = smoothstep(0.42, 0.0, x);
+                float hopeY = smoothstep(0.55, 0.0, y);
+                base = mix(base, hopeTint, hopeX * hopeY * 0.55);
 
-                // ----- Right: subtle cool shadow toward Mordor -----
-                // Pull a small amount of brightness out and shift the hue toward
-                // a desaturated cool purple-grey. Strength capped low so the
-                // effect reads as "clouds gathering on the horizon" rather than
-                // a colored mass on the sky.
-                vec3 shadowTint = vec3(0.30, 0.30, 0.38); // cool purple-grey
-                float rightShadow = smoothstep(0.45, 1.0, x);
-                base = mix(base, shadowTint, rightShadow * 0.28);
+                // ----- Right: burning Mordor horizon -----
+                // Fire from the foothills of Mount Doom lighting the sky. A hot
+                // orange-red core right at the bottom-right horizon, mid red
+                // bleed rising into the cloud bases, and a faint red underbelly
+                // staining the smoke higher up. All three are gated horizontally
+                // so the effect only appears on the right side of the frame.
+                float rightX = smoothstep(0.42, 0.95, x);
+
+                // Hot intense ember at the horizon line itself
+                vec3 emberHot  = vec3(0.94, 0.32, 0.06);
+                float hotY = pow(1.0 - smoothstep(0.0, 0.13, y), 1.4);
+                base = mix(base, emberHot, rightX * hotY * 0.90);
+
+                // Mid orange bleed reaching up toward cloud bases
+                vec3 emberMid  = vec3(0.52, 0.14, 0.05);
+                float midY = 1.0 - smoothstep(0.08, 0.40, y);
+                base = mix(base, emberMid, rightX * midY * 0.58);
+
+                // Faint red underbelly higher up — clouds catching the firelight
+                vec3 cloudBelly = vec3(0.22, 0.08, 0.06);
+                float bellyY = smoothstep(0.18, 0.40, y) * (1.0 - smoothstep(0.40, 0.70, y));
+                base = mix(base, cloudBelly, rightX * bellyY * 0.45);
 
                 gl_FragColor = vec4(base, 1.0);
             }
@@ -1967,48 +1986,11 @@ themeToggle?.addEventListener('click', () => {
     // Floating mist ovals removed — they read as UFOs against the sky.
     void makeMistTexture;
 
-    // ----- Clouds (3 clouds in top portion) -----
-    function makeCloudTexture(seed) {
-        const c = document.createElement('canvas');
-        c.width = 512; c.height = 256;
-        const g = c.getContext('2d');
-        const blobCount = 6 + Math.floor(Math.abs(Math.sin(seed * 7.3)) * 3);
-        for (let i = 0; i < blobCount; i++) {
-            const cx = 60 + (Math.sin(i * 3.7 + seed) * 0.5 + 0.5) * 392;
-            const cy = 80 + (Math.sin(i * 5.1 + seed * 2.3) * 0.5 + 0.5) * 96;
-            const rx = 50 + (Math.sin(i * 2.1 + seed * 1.3) * 0.5 + 0.5) * 70;
-            const ry = rx * (0.4 + Math.sin(i * 4.7 + seed) * 0.15);
-            const grad = g.createRadialGradient(cx, cy, 4, cx, cy, rx);
-            const warmth = cx / 512;
-            grad.addColorStop(0, `rgba(255,${250 + warmth * 5},${240 + warmth * 10},0.25)`);
-            grad.addColorStop(0.6, `rgba(255,${250 + warmth * 5},${240 + warmth * 10},0.08)`);
-            grad.addColorStop(1, `rgba(255,255,250,0)`);
-            g.fillStyle = grad;
-            g.beginPath();
-            g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-            g.fill();
-        }
-        const tex = new THREE.CanvasTexture(c);
-        tex.needsUpdate = true;
-        return tex;
-    }
-
+    // ----- Clouds removed -----
+    // The old puffy white-blob cloud sprites read as bright ovals against the
+    // dark Mordor sky. Atmosphere now comes entirely from the sky shader's
+    // ember/storm gradient and the rolling fog layers below the mountains.
     const clouds = [];
-    const cloudConfigs = [
-        { seed: 3,  x: -2, y: 4.5, z: -12, w: 6, h: 2, opacity: 0.5 },
-        { seed: 17, x: 3,  y: 5.0, z: -14, w: 7, h: 2.2, opacity: 0.4 },
-        { seed: 41, x: 7,  y: 4.0, z: -10, w: 5, h: 1.5, opacity: 0.45 },
-    ];
-    for (const cc of cloudConfigs) {
-        const tex = makeCloudTexture(cc.seed);
-        const mat = new THREE.MeshBasicMaterial({
-            map: tex, transparent: true, opacity: cc.opacity, depthWrite: false, fog: false,
-        });
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(cc.w, cc.h), mat);
-        plane.position.set(cc.x, cc.y, cc.z);
-        clouds.push(plane);
-        scene.add(plane);
-    }
 
     // ----- Barad-dûr — sits on the mountains on the right. MeshBasicMaterial = unlit, always dark.
     // Smooth 3-tier fortress with subtle overhang ledges; wide crown platform hosts the eye
