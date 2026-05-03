@@ -1464,6 +1464,11 @@ themeToggle?.addEventListener('click', () => {
                 }
 
                 pos.setY(i, ly + h);
+                // Raise rightmost peak of second layer from front
+                if (layerIdx === 7) {
+                    const rightBoost = Math.exp(-Math.pow(lx - 45, 2) / 20.0) * 0.6;
+                    pos.setY(i, ly + h + rightBoost);
+                }
                 if (layerIdx === 5) { // Update index for mid-range
                     topYs.push({ x: lx, y: spec.y + ly + h });
                 }
@@ -1871,20 +1876,20 @@ themeToggle?.addEventListener('click', () => {
     const newDarkMat = () => new THREE.MeshBasicMaterial({ color: towerColor, fog: false });
 
     // Tier 1 — slimmer base, tapers in
-    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.191, 0.306, 0.38, 16), newDarkMat());
+    const tBase = new THREE.Mesh(new THREE.CylinderGeometry(0.162, 0.260, 0.38, 16), newDarkMat());
     tBase.position.y = 0.19;
     baraddur.add(tBase);
-    // Tier 2 — bottom 0.230 overhangs tier 1's top 0.191 (small ledge), tapers to 0.153
-    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.153, 0.230, 0.30, 16), newDarkMat());
+    // Tier 2 — bottom 0.196 overhangs tier 1's top 0.162 (small ledge), tapers to 0.130
+    const tMid = new THREE.Mesh(new THREE.CylinderGeometry(0.130, 0.196, 0.30, 16), newDarkMat());
     tMid.position.y = 0.53;
     baraddur.add(tMid);
-    // Tier 3 — bottom 0.191 overhangs tier 2's top 0.153, tapers to 0.128
-    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.128, 0.191, 0.26, 16), newDarkMat());
+    // Tier 3 — bottom 0.162 overhangs tier 2's top 0.130, tapers to 0.109
+    const tUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.109, 0.162, 0.26, 16), newDarkMat());
     tUpper.position.y = 0.81;
     baraddur.add(tUpper);
     // Crown platform — flares well wider than upper tier's top so the eye fits inside it
     // and the prongs can sit on its outer edge instead of clustered in the center.
-    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.268, 0.204, 0.08, 16), newDarkMat());
+    const tCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.228, 0.173, 0.08, 16), newDarkMat());
     tCrown.position.y = 0.98;
     baraddur.add(tCrown);
 
@@ -1914,7 +1919,7 @@ themeToggle?.addEventListener('click', () => {
     for (const side of [-1, 1]) {
         const prongGeo = new THREE.TubeGeometry(new ThinProngCurve(side), 16, 0.018, 6, false);
         const prong = new THREE.Mesh(prongGeo, newDarkMat());
-        prong.position.set(side * 0.25, 1.02, 0);
+        prong.position.set(side * 0.22, 1.02, 0);
         baraddur.add(prong);
     }
 
