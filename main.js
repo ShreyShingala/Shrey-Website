@@ -1327,7 +1327,9 @@ themeToggle?.addEventListener('click', () => {
     const canvasW = () => canvas.clientWidth || window.innerWidth;
     const canvasH = () => canvas.clientHeight || window.innerHeight;
     renderer.setSize(canvasW(), canvasH(), false);
-    renderer.setClearColor(0xc8d0dc, 1);
+    // Clear color matches the grassy plain so any pixel that misses every mesh (e.g. a
+    // steep ray past the bottom of the sky plane) blends seamlessly into the ground.
+    renderer.setClearColor(0x5a5e5a, 1);
 
     // ----- Scene with exponential fog -----
     const scene = new THREE.Scene();
@@ -1513,16 +1515,18 @@ themeToggle?.addEventListener('click', () => {
         return mesh;
     });
 
-    // ----- Grassy plain — sits BEHIND the cliff so the cliff face can plunge down freely -----
-    // Forward edge at z=-5 (just past the cliff face area), back edge stretches to mountains.
-    const valleyGeo = new THREE.PlaneGeometry(280, 60, 1, 1);
+    // ----- Grassy plain — huge plane at a lower Y so the cliff has room to read tall -----
+    // Lowered from Y=-2.4 to Y=-3.5: the cliff face now has ~2.4 units of vertical drop
+    // visible above grass (was 1.3), while the grass itself shows prominently across the
+    // entire bottom of the frame.
+    const valleyGeo = new THREE.PlaneGeometry(600, 240, 1, 1);
     const valleyMat = new THREE.MeshLambertMaterial({
         color: new THREE.Color('#5a5e5a'),
         transparent: false,
     });
     const valley = new THREE.Mesh(valleyGeo, valleyMat);
     valley.rotation.x = -Math.PI / 2;
-    valley.position.set(0, -2.4, -35);
+    valley.position.set(0, -3.5, -15);
     scene.add(valley);
 
     // Subtle horizontal mist layer hovering over the valley — adds cold, distant feel
@@ -1565,7 +1569,7 @@ themeToggle?.addEventListener('click', () => {
         const colors = new Float32Array(pos.count * 3);
         const cornice  = new THREE.Color('#e8eef0');
         const rockMid  = new THREE.Color('#3a4250');
-        const rockDeep = new THREE.Color('#1c2028');
+        const rockDeep = new THREE.Color('#5a5e5a'); // matches grass tone — cliff base blends in
         const PEAK_RISE  = 4.7;
         const OUTER_DROP = -8.0;     // → world Y = -13.78, cliff face plunges all the way down
 
