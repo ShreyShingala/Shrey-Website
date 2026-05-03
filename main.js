@@ -1469,6 +1469,11 @@ themeToggle?.addEventListener('click', () => {
                     const rightBoost = Math.exp(-Math.pow(lx - 45, 2) / 20.0) * 0.6;
                     pos.setY(i, ly + h + rightBoost);
                 }
+                // Raise rightmost peak of second mountain from front (Front Foothills)
+                if (layerIdx === 6) {
+                    const rightBoost = Math.exp(-Math.pow(lx - 45, 2) / 22.0) * 1.8;
+                    pos.setY(i, ly + h + rightBoost);
+                }
                 if (layerIdx === 5) { // Update index for mid-range
                     topYs.push({ x: lx, y: spec.y + ly + h });
                 }
@@ -1640,6 +1645,135 @@ themeToggle?.addEventListener('click', () => {
         );
         mesh.position.set(cfg.x, cfg.y, cfg.z);
         mesh.userData = { ...cfg, tex };
+        scene.add(mesh);
+        return mesh;
+    });
+
+    // ----- Rolling mountain fog — multi-layer drifting mist from right to left -----
+    // Each layer is a wide plane with a procedural swirly noise texture. RepeatWrapping
+    // lets us scroll texture.offset.x leftward continuously without seams. The vertical
+    // alpha falloff inside the texture makes fog densest at the mountain-base line and
+    // thin out as it rises, so peaks pierce the mist while valleys stay buried.
+    function makeRollingFogTexture(seed) {
+        const W = 2048, H = 256;
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const g = c.getContext('2d');
+
+        const rng = (i) => {
+            const x = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+            return x - Math.floor(x);
+        };
+
+        const drawBlob = (cx, cy, rx, ry, alpha) => {
+            const grad = g.createRadialGradient(cx, cy, 4, cx, cy, Math.max(rx, ry));
+            grad.addColorStop(0,    `rgba(206, 216, 228, ${alpha})`);
+            grad.addColorStop(0.45, `rgba(184, 198, 214, ${alpha * 0.65})`);
+            grad.addColorStop(1,    'rgba(206, 216, 228, 0)');
+            g.fillStyle = grad;
+            g.beginPath();
+            g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            g.fill();
+        };
+
+        // Two passes of soft swirly blobs at different scales — bigger, slow body of fog
+        // plus smaller wisps and tendrils woven through it.
+        const big = 32;
+        for (let i = 0; i < big; i++) {
+            const cx = rng(i) * W;
+            const cy = 90 + rng(i + 100) * 110;
+            const rx = 160 + rng(i + 200) * 280;
+            const ry = 36 + rng(i + 300) * 64;
+            const alpha = 0.34 + rng(i + 400) * 0.34;
+            drawBlob(cx, cy, rx, ry, alpha);
+            // Wrap copies so the texture tiles seamlessly when RepeatWrapping scrolls it.
+            if (cx - rx < 0) drawBlob(cx + W, cy, rx, ry, alpha);
+            if (cx + rx > W) drawBlob(cx - W, cy, rx, ry, alpha);
+        }
+        const small = 70;
+        for (let i = 0; i < small; i++) {
+            const cx = rng(i + 1000) * W;
+            const cy = 60 + rng(i + 1100) * 160;
+            const rx = 40 + rng(i + 1200) * 120;
+            const ry = 14 + rng(i + 1300) * 30;
+            const alpha = 0.18 + rng(i + 1400) * 0.26;
+            drawBlob(cx, cy, rx, ry, alpha);
+            if (cx - rx < 0) drawBlob(cx + W, cy, rx, ry, alpha);
+            if (cx + rx > W) drawBlob(cx - W, cy, rx, ry, alpha);
+        }
+
+        // Vertical alpha mask — densest just above the bottom (mountain-base line),
+        // thinning toward the top so peaks emerge from the mist. A small bottom feather
+        // keeps the lower edge from reading as a hard horizontal line on the grass.
+        g.globalCompositeOperation = 'destination-in';
+        const vGrad = g.createLinearGradient(0, 0, 0, H);
+        vGrad.addColorStop(0.00, 'rgba(0,0,0,0)');
+        vGrad.addColorStop(0.18, 'rgba(0,0,0,0.35)');
+        vGrad.addColorStop(0.55, 'rgba(0,0,0,1.0)');
+        vGrad.addColorStop(0.85, 'rgba(0,0,0,0.85)');
+        vGrad.addColorStop(1.00, 'rgba(0,0,0,0.18)');
+        g.fillStyle = vGrad;
+        g.fillRect(0, 0, W, H);
+        g.globalCompositeOperation = 'source-over';
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Layer plan, back-to-front. All layers sit IN FRONT of the opaque mid range
+    // (z=-30) and front foothills (z=-19.5) so they aren't depth-occluded. Repeats >1
+    // give finer texture detail per layer; lower scrollSpeed = slower drift (deeper
+    // layers feel further away). Pulse phase/period is unique per layer so banks
+    // breathe independently rather than as one wall.
+    const rollingFogSpecs = [
+        // Deep slow bank, sits high enough to wrap mid-range shoulders and faintly
+        // veil the distant peaks beyond. Slowest drift = deepest-feeling layer.
+        { y: -1.4, z: -29, w: 140, h: 13.0, repeats: 2.4, opacity: 0.55, scrollSpeed: 0.0040, pulsePeriod: 14.0, pulseAmp: 0.20, phase: 0.4, seed: 11 },
+        // Mid bank wrapping mid-range bases — denser, the "valley fog" that fills the
+        // gap between the front foothills and the receding ranges behind.
+        { y: -2.3, z: -27, w: 130, h:  9.5, repeats: 2.1, opacity: 0.70, scrollSpeed: 0.0062, pulsePeriod: 11.0, pulseAmp: 0.22, phase: 1.6, seed: 23 },
+        // High wispy tendrils above the mid-range peaks — sparse, slightly faster
+        // than the heavy banks below to suggest higher-altitude air movement.
+        { y:  0.4, z: -25, w: 130, h:  8.0, repeats: 2.8, opacity: 0.34, scrollSpeed: 0.0055, pulsePeriod: 13.0, pulseAmp: 0.16, phase: 3.1, seed: 53 },
+        // Densest foothill mist — sits exactly at the grass-meets-mountain line so it
+        // softens that junction and partially swallows the foothill bases.
+        { y: -2.80, z: -22, w: 105, h: 6.8, repeats: 1.9, opacity: 0.78, scrollSpeed: 0.0090, pulsePeriod:  9.5, pulseAmp: 0.22, phase: 2.3, seed: 37 },
+        // Frontmost low valley fog drifting in front of the foothills — fastest,
+        // smallest, hugs the grass close to camera.
+        { y: -3.65, z: -19, w:  85, h: 5.0, repeats: 1.6, opacity: 0.55, scrollSpeed: 0.0130, pulsePeriod:  8.0, pulseAmp: 0.20, phase: 5.0, seed: 71 },
+
+        // Thin wispy junction layers — short plane heights + high repeats give a
+        // streaky, horizontal-wisp character that softens the hard line where the
+        // mountain silhouettes meet the grassy plain. Each sits at a slightly
+        // different y/z and scrolls at its own rate so the seam never feels static.
+        { y: -2.78, z: -28, w: 140, h: 2.6, repeats: 4.2, opacity: 0.55, scrollSpeed: 0.0085, pulsePeriod: 7.2, pulseAmp: 0.18, phase: 0.9, seed: 89 },
+        { y: -2.85, z: -24, w: 120, h: 2.2, repeats: 3.8, opacity: 0.50, scrollSpeed: 0.0110, pulsePeriod: 6.4, pulseAmp: 0.16, phase: 4.2, seed: 97 },
+        { y: -3.45, z: -20.5, w: 100, h: 1.8, repeats: 4.6, opacity: 0.45, scrollSpeed: 0.0150, pulsePeriod: 5.6, pulseAmp: 0.14, phase: 2.7, seed: 103 },
+
+        // Barad-dûr halo fog — localized banks centered on the tower (x≈23) to
+        // thicken the mist around the right side without affecting the rest of
+        // the scene. A taller bank wraps the tower's base and a low wisp drifts
+        // in front of it so the tower periodically dims behind passing fog.
+        { x: 22, y: -1.9, z: -27, w: 46, h: 9.5, repeats: 1.5, opacity: 0.62, scrollSpeed: 0.0058, pulsePeriod: 12.5, pulseAmp: 0.20, phase: 1.2, seed: 131 },
+        { x: 23, y: -2.55, z: -22, w: 36, h: 4.6, repeats: 1.8, opacity: 0.60, scrollSpeed: 0.0098, pulsePeriod:  8.6, pulseAmp: 0.18, phase: 3.4, seed: 137 },
+    ];
+
+    const rollingFogLayers = rollingFogSpecs.map((cfg) => {
+        const tex = makeRollingFogTexture(cfg.seed);
+        tex.repeat.set(cfg.repeats, 1);
+        const mat = new THREE.MeshBasicMaterial({
+            map: tex,
+            transparent: true,
+            opacity: cfg.opacity,
+            depthWrite: false,
+            fog: false,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.w, cfg.h), mat);
+        mesh.position.set(cfg.x ?? 0, cfg.y, cfg.z);
+        mesh.userData = cfg;
         scene.add(mesh);
         return mesh;
     });
@@ -2066,6 +2200,19 @@ themeToggle?.addEventListener('click', () => {
             wisp.position.x = cfg.x + Math.sin(elapsed * 0.10 + cfg.phase) * 1.1;
             wisp.position.y = cfg.y + Math.sin(elapsed * 0.16 + cfg.phase) * 0.08;
             wisp.material.opacity = cfg.opacity + Math.sin(elapsed * 0.24 + cfg.phase) * 0.08;
+        }
+
+        // Rolling mountain fog — scroll texture offset right-to-left per layer, with a
+        // slow opacity breath and a tiny vertical bob so each bank feels alive and
+        // independent rather than one synchronized wall of mist.
+        for (const fog of rollingFogLayers) {
+            const cfg = fog.userData;
+            // Positive offset.x advances the UV sample window rightward through the
+            // texture, which makes the fog content appear to drift LEFT on screen.
+            fog.material.map.offset.x = elapsed * cfg.scrollSpeed;
+            const pulse = Math.sin((elapsed * Math.PI * 2) / cfg.pulsePeriod + cfg.phase);
+            fog.material.opacity = Math.max(0, cfg.opacity + pulse * cfg.pulseAmp);
+            fog.position.y = cfg.y + Math.sin(elapsed * 0.09 + cfg.phase) * 0.05;
         }
 
         const eyePulse = (Math.sin(elapsed * 0.8) + 1) * 0.5;
