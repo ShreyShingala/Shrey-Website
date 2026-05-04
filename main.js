@@ -1406,6 +1406,24 @@ themeToggle?.addEventListener('click', () => {
     scene.fog = FOG_MODE === 'exp2' ? new THREE.FogExp2(fogColorExp2, exp2Density) : null;
     const heightFogMaterials = [];
 
+    // Shared uniforms for the Sauron-beam red tint applied through the height-fog shader
+    // and the sprite-fog tint shader. Per-frame updates to .value fields propagate to every
+    // material that referenced this object.
+    const beamTintUniforms = {
+        uBeamOrigin: { value: new THREE.Vector3() },
+        uBeamDir: { value: new THREE.Vector3(0, -1, 0) },
+        uBeamRadiusNear: { value: 1.5 },
+        uBeamRadiusFar: { value: 14.0 },
+        uBeamLength: { value: 38.0 },
+        uBeamTintColor: { value: new THREE.Color('#d8321a') },
+        uBeamTintStrength: { value: 0 },
+        // Static red glow centered on Barad-dûr — bleeds into surrounding fog/mountains
+        // even when the beam points elsewhere, so the tower itself reads as the source of evil.
+        uTowerOrigin: { value: new THREE.Vector3() },
+        uTowerRadius: { value: 22.0 },
+        uTowerStrength: { value: 0.0 },
+    };
+
     function applyHeightFogToMaterial(material, cfg) {
         if (!material || material.isShaderMaterial || material.fog === false) return;
         material.fog = true;
@@ -1417,6 +1435,16 @@ themeToggle?.addEventListener('click', () => {
             shader.uniforms.uHeightFogValleyDensityMul = { value: cfg.valleyDensityMul };
             shader.uniforms.uHeightFogHighDensityMul = { value: cfg.highDensityMul };
             shader.uniforms.uHeightFogValleyBoost = { value: cfg.valleyBoost };
+            shader.uniforms.uBeamOrigin = beamTintUniforms.uBeamOrigin;
+            shader.uniforms.uBeamDir = beamTintUniforms.uBeamDir;
+            shader.uniforms.uBeamRadiusNear = beamTintUniforms.uBeamRadiusNear;
+            shader.uniforms.uBeamRadiusFar = beamTintUniforms.uBeamRadiusFar;
+            shader.uniforms.uBeamLength = beamTintUniforms.uBeamLength;
+            shader.uniforms.uBeamTintColor = beamTintUniforms.uBeamTintColor;
+            shader.uniforms.uBeamTintStrength = beamTintUniforms.uBeamTintStrength;
+            shader.uniforms.uTowerOrigin = beamTintUniforms.uTowerOrigin;
+            shader.uniforms.uTowerRadius = beamTintUniforms.uTowerRadius;
+            shader.uniforms.uTowerStrength = beamTintUniforms.uTowerStrength;
 
             shader.vertexShader = shader.vertexShader
                 .replace(
@@ -1441,7 +1469,17 @@ themeToggle?.addEventListener('click', () => {
                     uniform float uHeightFogMaxY;
                     uniform float uHeightFogValleyDensityMul;
                     uniform float uHeightFogHighDensityMul;
-                    uniform float uHeightFogValleyBoost;`
+                    uniform float uHeightFogValleyBoost;
+                    uniform vec3 uBeamOrigin;
+                    uniform vec3 uBeamDir;
+                    uniform float uBeamRadiusNear;
+                    uniform float uBeamRadiusFar;
+                    uniform float uBeamLength;
+                    uniform vec3 uBeamTintColor;
+                    uniform float uBeamTintStrength;
+                    uniform vec3 uTowerOrigin;
+                    uniform float uTowerRadius;
+                    uniform float uTowerStrength;`
                 )
                 .replace(
                     '#include <fog_fragment>',
@@ -1456,12 +1494,32 @@ themeToggle?.addEventListener('click', () => {
                     float fogAmount = 1.0 - exp(-depthToCamera * localDensity);
                     fogAmount = clamp(fogAmount + heightMask * uHeightFogValleyBoost, 0.0, 1.0);
                     gl_FragColor.rgb = mix(gl_FragColor.rgb, uHeightFogColor, fogAmount);
+
+                    if (uBeamTintStrength > 0.0001) {
+                        vec3 toFrag = vHeightFogWorldPos - uBeamOrigin;
+                        float along = max(dot(toFrag, uBeamDir), 0.0);
+                        vec3 perp = toFrag - along * uBeamDir;
+                        float perpDist = length(perp);
+                        float tBeam = clamp(along / uBeamLength, 0.0, 1.0);
+                        float coneRadius = mix(uBeamRadiusNear, uBeamRadiusFar, tBeam);
+                        float beamMask = 1.0 - smoothstep(coneRadius * 0.4, coneRadius, perpDist);
+                        beamMask *= 1.0 - smoothstep(uBeamLength * 0.85, uBeamLength * 1.15, along);
+                        float beamMix = beamMask * uBeamTintStrength * (0.55 + 0.45 * fogAmount);
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(beamMix, 0.0, 1.0));
+                    }
+
+                    if (uTowerStrength > 0.0001) {
+                        float towerDist = length(vHeightFogWorldPos - uTowerOrigin);
+                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.15, uTowerRadius, towerDist);
+                        float towerMix = towerMask * uTowerStrength * (0.45 + 0.55 * fogAmount);
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(towerMix, 0.0, 1.0));
+                    }
                     #endif`
                 );
         };
         material.customProgramCacheKey = () => {
             return [
-                'height-fog-v1',
+                'height-fog-v3-beamtint-tower',
                 cfg.minY,
                 cfg.maxY,
                 cfg.depthDensity,
@@ -1471,6 +1529,81 @@ themeToggle?.addEventListener('click', () => {
             ].join(':');
         };
         material.needsUpdate = true;
+    }
+
+    // Tints a foreground fog/mist sprite material (MeshBasicMaterial) red wherever
+    // it lies inside Sauron's beam cone or near the Barad-dûr tower glow. Uses the
+    // same shared beamTintUniforms so beam direction, intensity, and tower strength
+    // all stay in lockstep with the height-fog shader on the mountains behind.
+    const spriteTintMaterials = [];
+    function applyBeamTintToSpriteMaterial(material) {
+        if (!material || material.isShaderMaterial) return;
+        material.onBeforeCompile = (shader) => {
+            shader.uniforms.uBeamOrigin = beamTintUniforms.uBeamOrigin;
+            shader.uniforms.uBeamDir = beamTintUniforms.uBeamDir;
+            shader.uniforms.uBeamRadiusNear = beamTintUniforms.uBeamRadiusNear;
+            shader.uniforms.uBeamRadiusFar = beamTintUniforms.uBeamRadiusFar;
+            shader.uniforms.uBeamLength = beamTintUniforms.uBeamLength;
+            shader.uniforms.uBeamTintColor = beamTintUniforms.uBeamTintColor;
+            shader.uniforms.uBeamTintStrength = beamTintUniforms.uBeamTintStrength;
+            shader.uniforms.uTowerOrigin = beamTintUniforms.uTowerOrigin;
+            shader.uniforms.uTowerRadius = beamTintUniforms.uTowerRadius;
+            shader.uniforms.uTowerStrength = beamTintUniforms.uTowerStrength;
+
+            shader.vertexShader = shader.vertexShader
+                .replace(
+                    '#include <common>',
+                    `#include <common>
+                    varying vec3 vSpriteWorldPos;`
+                )
+                .replace(
+                    '#include <begin_vertex>',
+                    `#include <begin_vertex>
+                    vSpriteWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                );
+
+            shader.fragmentShader = shader.fragmentShader
+                .replace(
+                    '#include <common>',
+                    `#include <common>
+                    varying vec3 vSpriteWorldPos;
+                    uniform vec3 uBeamOrigin;
+                    uniform vec3 uBeamDir;
+                    uniform float uBeamRadiusNear;
+                    uniform float uBeamRadiusFar;
+                    uniform float uBeamLength;
+                    uniform vec3 uBeamTintColor;
+                    uniform float uBeamTintStrength;
+                    uniform vec3 uTowerOrigin;
+                    uniform float uTowerRadius;
+                    uniform float uTowerStrength;`
+                )
+                .replace(
+                    '#include <dithering_fragment>',
+                    `#include <dithering_fragment>
+                    if (uBeamTintStrength > 0.0001) {
+                        vec3 toFrag = vSpriteWorldPos - uBeamOrigin;
+                        float along = max(dot(toFrag, uBeamDir), 0.0);
+                        vec3 perp = toFrag - along * uBeamDir;
+                        float perpDist = length(perp);
+                        float tBeam = clamp(along / uBeamLength, 0.0, 1.0);
+                        float coneRadius = mix(uBeamRadiusNear, uBeamRadiusFar, tBeam);
+                        float beamMask = 1.0 - smoothstep(coneRadius * 0.4, coneRadius, perpDist);
+                        beamMask *= 1.0 - smoothstep(uBeamLength * 0.85, uBeamLength * 1.15, along);
+                        float beamMix = beamMask * uBeamTintStrength * 0.95;
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(beamMix, 0.0, 1.0));
+                    }
+                    if (uTowerStrength > 0.0001) {
+                        float towerDist = length(vSpriteWorldPos - uTowerOrigin);
+                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.15, uTowerRadius, towerDist);
+                        float towerMix = towerMask * uTowerStrength;
+                        gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(towerMix, 0.0, 1.0));
+                    }`
+                );
+        };
+        material.customProgramCacheKey = () => 'sprite-beamtint-v1';
+        material.needsUpdate = true;
+        spriteTintMaterials.push(material);
     }
 
     // ----- Camera — Gandalf left foreground, mountains cascade right, tower far right -----
@@ -1792,6 +1925,7 @@ themeToggle?.addEventListener('click', () => {
     const mistPlane = new THREE.Mesh(mistGeo, mistMat);
     mistPlane.rotation.x = -Math.PI / 2;
     mistPlane.position.set(0, -3.15, -36); // Constrained to mountain depth only
+    applyBeamTintToSpriteMaterial(mistMat);
     scene.add(mistPlane);
 
     // ----- Low foothill haze — softens the grass-to-mountain meeting line -----
@@ -1857,6 +1991,7 @@ themeToggle?.addEventListener('click', () => {
     const groundBlend = new THREE.Mesh(new THREE.PlaneGeometry(120, 6.6), groundBlendMat);
     groundBlend.position.set(0, -2.95, -29.5);
     groundBlend.userData = { scrollSpeed: 0.0070 };
+    applyBeamTintToSpriteMaterial(groundBlendMat);
     scene.add(groundBlend);
 
     const groundBlendTex2 = makeGroundBlendTexture();
@@ -1874,6 +2009,7 @@ themeToggle?.addEventListener('click', () => {
     );
     groundBlendBack.position.set(3, -2.80, -34.0);
     groundBlendBack.userData = { scrollSpeed: 0.0048 };
+    applyBeamTintToSpriteMaterial(groundBlendBack.material);
     scene.add(groundBlendBack);
 
     const mountainWisps = [
@@ -1898,6 +2034,7 @@ themeToggle?.addEventListener('click', () => {
         );
         mesh.position.set(cfg.x, cfg.y, cfg.z);
         mesh.userData = { ...cfg, tex };
+        applyBeamTintToSpriteMaterial(mesh.material);
         scene.add(mesh);
         return mesh;
     });
@@ -2021,6 +2158,7 @@ themeToggle?.addEventListener('click', () => {
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.w, cfg.h), mat);
         mesh.position.set(cfg.x ?? 0, cfg.y, cfg.z);
         mesh.userData = cfg;
+        applyBeamTintToSpriteMaterial(mat);
         scene.add(mesh);
         return mesh;
     });
@@ -2586,18 +2724,19 @@ themeToggle?.addEventListener('click', () => {
     const lerpAngle = (from, to, t) => from + shortestAngleDelta(from, to) * t;
 
     const fullCircleDuration = 18.0;
-    const gandalfHoldDuration = 8.0;
+    const gandalfHoldDuration = 12.0;
     const randomPhaseDuration = 30.0;
     const cooldownDuration = 60.0;
     const activeFadeDuration = 1.5;
     const gandalfLockYaw = 0.1021;
     const gandalfLockPitch = -0.0967;
     const gandalfLockRampDuration = 2.2;
+    const gandalfLockReleaseDuration = 1.8; // seconds to relax the lock after leaving GANDALF_HOLD
     const gandalfHoldSpreadScale = 1.55;
-    const gandalfHoldOpacityMul = 1.6;
+    const gandalfHoldOpacityMul = 2.4;
     const spreadLerpRate = 3.0;
-    const randomYawRange = { min: 3.4064, max: 5.2864 };
-    const randomPitchRange = { min: -0.25, max: 0.025 };
+    const randomYawRange = { min: 3.40, max: 5.40 };
+    const randomPitchRange = { min: -0.34, max: 0.18 };
 
     let fullCircleStartYaw = 0;
     let beamYaw = 0;
@@ -2616,6 +2755,7 @@ themeToggle?.addEventListener('click', () => {
     let isRandomTargetHolding = false;
     let isFirstRandomMove = false;
     let beamSpreadScale = 1;
+    let gandalfLockStrength = 0;
     let beamManualPaused = false;
     const manualYawStep = 0.04;
     const manualPitchStep = 0.025;
@@ -2742,6 +2882,67 @@ themeToggle?.addEventListener('click', () => {
     gandalf.rotation.y = 0.0; // facing right toward the tower (back of cloak to camera)
     gandalf.renderOrder = 2;
     scene.add(gandalf);
+
+    // Temporary debug mode flag. Keep true while shadow visibility is being tuned.
+    const FORCE_DEBUG_SHADOW = true;
+
+    function makeGroundShadowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 256;
+        const g = c.getContext('2d');
+        if (!g) return null;
+
+        // Horizontal cast-shadow: darker center with soft falloff.
+        const grad = g.createRadialGradient(128, 128, 8, 128, 128, 120);
+        grad.addColorStop(0.0, 'rgba(0,0,0,0.95)');
+        grad.addColorStop(0.45, 'rgba(0,0,0,0.55)');
+        grad.addColorStop(0.85, 'rgba(0,0,0,0.12)');
+        grad.addColorStop(1.0, 'rgba(0,0,0,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 256, 256);
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const gandalfShadowMat = new THREE.MeshBasicMaterial({
+        map: FORCE_DEBUG_SHADOW ? null : makeGroundShadowTexture(),
+        color: new THREE.Color(0x050505),
+        transparent: true,
+        opacity: FORCE_DEBUG_SHADOW ? 0.92 : 0.42,
+        depthTest: FORCE_DEBUG_SHADOW ? false : true,
+        depthWrite: false,
+        alphaTest: FORCE_DEBUG_SHADOW ? 0.0 : 0.0,
+        polygonOffset: !FORCE_DEBUG_SHADOW,
+        polygonOffsetFactor: -0.1,
+        polygonOffsetUnits: -1,
+        side: THREE.DoubleSide,
+    });
+    const gandalfShadowW = FORCE_DEBUG_SHADOW ? gandalfW * 1.2 : gandalfW * 1.08;
+    const gandalfShadowL = FORCE_DEBUG_SHADOW ? gandalfH * 1.6 : gandalfH * 0.92;
+    const gandalfShadow = new THREE.Mesh(new THREE.PlaneGeometry(gandalfShadowW, gandalfShadowL), gandalfShadowMat);
+    const shadowDirXZ = new THREE.Vector2(gandalfX - eyeWorldPos.x, gandalfZ - eyeWorldPos.z);
+    if (shadowDirXZ.lengthSq() < 1e-6) shadowDirXZ.set(1, 0);
+    shadowDirXZ.normalize();
+    const shadowYaw = Math.atan2(shadowDirXZ.x, shadowDirXZ.y);
+    gandalfShadow.rotation.set(-Math.PI / 2, shadowYaw, 0);
+    // Ground-anchored cast shadow, projected away from Barad-dur.
+    {
+        const shadowPush = gandalfShadowL * (FORCE_DEBUG_SHADOW ? 0.0 : 0.12);
+        const shadowSurfaceY = FORCE_DEBUG_SHADOW ? -1.07 : -1.065; // debug at feet vs tuned anchor
+        gandalfShadow.position.set(
+            gandalfX + shadowDirXZ.x * shadowPush,
+            shadowSurfaceY,
+            gandalfZ + shadowDirXZ.y * shadowPush,
+        );
+    }
+    gandalfShadow.renderOrder = FORCE_DEBUG_SHADOW ? 40 : 4;
+    scene.add(gandalfShadow);
 
     gandalfBeamTarget = new THREE.Vector3(-11.817, -0.043, -14.862);
     randomBeamTargets = [];
@@ -3183,7 +3384,6 @@ themeToggle?.addEventListener('click', () => {
 
         // Sauron searchlight cycle:
         // 1) one full circle sweep, 2) Gandalf lock, 3) random scenic targeting.
-        let gandalfLockStrength = 0;
         if (beamManualPaused) {
             currentOpacity = MAX_OPACITY;
         } else {
@@ -3215,8 +3415,7 @@ themeToggle?.addEventListener('click', () => {
                     beamPitch = beamTargetPitch;
                     const holdT = Math.min(beamStateTimer / gandalfLockRampDuration, 1);
                     gandalfLockStrength = holdT * holdT * (3 - 2 * holdT);
-                    const lockStrength = 1 + (gandalfHoldOpacityMul - 1) * gandalfLockStrength;
-                    currentOpacity = Math.min(1, MAX_OPACITY * lockStrength);
+                    currentOpacity = MAX_OPACITY;
                     if (beamStateTimer >= gandalfHoldDuration) {
                         enterBeamState(BEAM_STATE.RANDOM_TARGETING, elapsed);
                     }
@@ -3225,6 +3424,7 @@ themeToggle?.addEventListener('click', () => {
 
                 case BEAM_STATE.RANDOM_TARGETING: {
                     beamStateTimer += deltaTime;
+                    gandalfLockStrength = Math.max(0, gandalfLockStrength - deltaTime / gandalfLockReleaseDuration);
 
                     if (!isRandomTargetHolding) {
                         randomTargetMoveTimer += deltaTime;
@@ -3276,6 +3476,21 @@ themeToggle?.addEventListener('click', () => {
         beamSpreadScale += (targetSpreadScale - beamSpreadScale) * Math.min(1, deltaTime * spreadLerpRate);
         sauronBeamBlades.scale.set(beamSpreadScale, 1, beamSpreadScale);
 
+        const lockOpacityMul = 1 + (gandalfHoldOpacityMul - 1) * gandalfLockStrength;
+        currentOpacity = Math.min(1, currentOpacity * lockOpacityMul);
+
+        sauronBeamSweeper.updateMatrixWorld(true);
+        sauronBeamBlades.getWorldQuaternion(tmpBeamQuat);
+        tmpBeamDir.set(0, -1, 0).applyQuaternion(tmpBeamQuat).normalize();
+        beamTintUniforms.uBeamOrigin.value.copy(eyeWorldPos);
+        beamTintUniforms.uBeamDir.value.copy(tmpBeamDir);
+        beamTintUniforms.uBeamLength.value = BEAM_LENGTH;
+        // Beam-cone red disabled — only the tower's ambient red glow remains.
+        beamTintUniforms.uBeamTintStrength.value = 0;
+        beamTintUniforms.uTowerOrigin.value.copy(eyeWorldPos);
+        const towerBreath = 0.85 + 0.15 * Math.sin(elapsed * 0.45);
+        beamTintUniforms.uTowerStrength.value = 0.32 * towerBreath;
+
         // Single shared material drives all blades.
         beamMaterial.opacity = currentOpacity;
         sauronBeamBlades.visible = currentOpacity > 0.001;
@@ -3294,6 +3509,9 @@ themeToggle?.addEventListener('click', () => {
 
         // Gandalf idle wind sway
         gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
+        gandalfShadowMat.opacity = FORCE_DEBUG_SHADOW
+            ? 0.92
+            : (0.42 + 0.23 * gandalfLockStrength);
 
         // Pipe smoke: constant light wisps + grouped dark plumes.
         if (nextDarkSmokeAt === 0) {
