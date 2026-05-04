@@ -2883,8 +2883,8 @@ themeToggle?.addEventListener('click', () => {
     gandalf.renderOrder = 2;
     scene.add(gandalf);
 
-    // Temporary debug mode flag. Keep true while shadow visibility is being tuned.
-    const FORCE_DEBUG_SHADOW = true;
+    // Temporary debug mode flag. Keep false for normal runtime behavior.
+    const FORCE_DEBUG_SHADOW = false;
 
     function makeGroundShadowTexture() {
         const c = document.createElement('canvas');
@@ -2911,36 +2911,67 @@ themeToggle?.addEventListener('click', () => {
     }
 
     const gandalfShadowMat = new THREE.MeshBasicMaterial({
-        map: FORCE_DEBUG_SHADOW ? null : makeGroundShadowTexture(),
-        color: new THREE.Color(0x050505),
+        map: gandalfTexture,
+        color: new THREE.Color(0x000000),
         transparent: true,
-        opacity: FORCE_DEBUG_SHADOW ? 0.92 : 0.42,
-        depthTest: FORCE_DEBUG_SHADOW ? false : true,
+        opacity: FORCE_DEBUG_SHADOW ? 0.92 : 0.0,
+        depthTest: false,
         depthWrite: false,
-        alphaTest: FORCE_DEBUG_SHADOW ? 0.0 : 0.0,
-        polygonOffset: !FORCE_DEBUG_SHADOW,
+        alphaTest: 0.1,
+        polygonOffset: false,
         polygonOffsetFactor: -0.1,
         polygonOffsetUnits: -1,
         side: THREE.DoubleSide,
     });
-    const gandalfShadowW = FORCE_DEBUG_SHADOW ? gandalfW * 1.2 : gandalfW * 1.08;
-    const gandalfShadowL = FORCE_DEBUG_SHADOW ? gandalfH * 1.6 : gandalfH * 0.92;
-    const gandalfShadow = new THREE.Mesh(new THREE.PlaneGeometry(gandalfShadowW, gandalfShadowL), gandalfShadowMat);
-    const shadowDirXZ = new THREE.Vector2(gandalfX - eyeWorldPos.x, gandalfZ - eyeWorldPos.z);
-    if (shadowDirXZ.lengthSq() < 1e-6) shadowDirXZ.set(1, 0);
-    shadowDirXZ.normalize();
-    const shadowYaw = Math.atan2(shadowDirXZ.x, shadowDirXZ.y);
-    gandalfShadow.rotation.set(-Math.PI / 2, shadowYaw, 0);
-    // Ground-anchored cast shadow, projected away from Barad-dur.
-    {
-        const shadowPush = gandalfShadowL * (FORCE_DEBUG_SHADOW ? 0.0 : 0.12);
-        const shadowSurfaceY = FORCE_DEBUG_SHADOW ? -1.07 : -1.065; // debug at feet vs tuned anchor
+    // --- Shadow Tweaking Variables ---
+    const shadowBaseProfile = Object.freeze({
+        width: 2.95,
+        length: 0.65,
+        gap: -0.64,
+        side: 1.62,
+    });
+    let shadowTweakW = shadowBaseProfile.width;
+    let shadowTweakL = shadowBaseProfile.length;
+    let shadowGapFix = shadowBaseProfile.gap;
+    let shadowSideFix = shadowBaseProfile.side;
+    let shadowShineStrength = FORCE_DEBUG_SHADOW ? 1 : 0;
+    const shadowStareMaxOpacity = 0.68;
+    const shadowFadeInRate = 3.8;
+    const shadowFadeOutRate = 1.1;
+
+    const gandalfShadowGeo = new THREE.PlaneGeometry(gandalfW * shadowTweakW, gandalfH * shadowTweakL);
+    const gandalfShadow = new THREE.Mesh(gandalfShadowGeo, gandalfShadowMat);
+    gandalfShadow.rotation.set(0, 0, 0);
+
+    function updateGandalfShadow() {
+        const w = gandalfW * shadowTweakW;
+        const l = gandalfH * shadowTweakL;
+        
+        const shadowDirXZ = new THREE.Vector2(gandalfX - eyeWorldPos.x, gandalfZ - eyeWorldPos.z);
+        if (shadowDirXZ.lengthSq() < 1e-6) shadowDirXZ.set(1, 0);
+        shadowDirXZ.normalize();
+        const shadowPerpXZ = new THREE.Vector2(-shadowDirXZ.y, shadowDirXZ.x);
+
+        const pos = gandalfShadowGeo.attributes.position;
+        const sw2 = w / 2;
+        // PlaneGeometry vertices: 0=TL, 1=TR, 2=BL, 3=BR
+        pos.setXYZ(0, -sw2 + shadowDirXZ.x * l, 0, shadowDirXZ.y * l);
+        pos.setXYZ(1,  sw2 + shadowDirXZ.x * l, 0, shadowDirXZ.y * l);
+        pos.setXYZ(2, -sw2, 0, 0);
+        pos.setXYZ(3,  sw2, 0, 0);
+        pos.needsUpdate = true;
+        gandalfShadowGeo.computeVertexNormals();
+
+        const shadowSurfaceY = gandalfWorldY - gandalfH / 2;
+        // Keep the near edge pinned near Gandalf so width/length animation does not slide the base.
         gandalfShadow.position.set(
-            gandalfX + shadowDirXZ.x * shadowPush,
+            gandalfX + shadowDirXZ.x * shadowGapFix + shadowPerpXZ.x * shadowSideFix,
             shadowSurfaceY,
-            gandalfZ + shadowDirXZ.y * shadowPush,
+            gandalfZ + shadowDirXZ.y * shadowGapFix + shadowPerpXZ.y * shadowSideFix,
         );
     }
+    updateGandalfShadow();
+
     gandalfShadow.renderOrder = FORCE_DEBUG_SHADOW ? 40 : 4;
     scene.add(gandalfShadow);
 
@@ -2964,29 +2995,79 @@ themeToggle?.addEventListener('click', () => {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
 
-        let changed = false;
+        let beamChanged = false;
+        let shadowChanged = false;
+
         switch (e.code) {
+            // Beam Controls
             case 'KeyW':
                 beamPitch = THREE.MathUtils.clamp(beamPitch + manualPitchStep, -0.4, 0.4);
-                changed = true;
+                beamChanged = true;
                 break;
             case 'KeyS':
                 beamPitch = THREE.MathUtils.clamp(beamPitch - manualPitchStep, -0.4, 0.4);
-                changed = true;
+                beamChanged = true;
                 break;
             case 'KeyA':
                 beamYaw -= manualYawStep;
-                changed = true;
+                beamChanged = true;
                 break;
             case 'KeyD':
                 beamYaw += manualYawStep;
-                changed = true;
+                beamChanged = true;
+                break;
+
+            // Shadow Controls
+            case 'ArrowUp':
+                shadowGapFix -= 0.02; // slide further back
+                shadowChanged = true;
+                break;
+            case 'ArrowDown':
+                shadowGapFix += 0.02; // slide forward
+                shadowChanged = true;
+                break;
+            case 'ArrowRight':
+                shadowSideFix -= 0.02; // slide right
+                shadowChanged = true;
+                break;
+            case 'ArrowLeft':
+                shadowSideFix += 0.02; // slide left
+                shadowChanged = true;
+                break;
+            case 'Equal': // '+' key (usually next to backspace)
+            case 'NumpadAdd':
+                shadowTweakW += 0.05;
+                shadowChanged = true;
+                break;
+            case 'Minus': // '-' key
+            case 'NumpadSubtract':
+                shadowTweakW = Math.max(0.1, shadowTweakW - 0.05);
+                shadowChanged = true;
+                break;
+            case 'BracketRight':
+                shadowTweakL += 0.05;
+                shadowChanged = true;
+                break;
+            case 'BracketLeft':
+                shadowTweakL = Math.max(0.1, shadowTweakL - 0.05);
+                shadowChanged = true;
+                break;
+            case 'KeyP':
+                console.log(`[Shadow Debug] shadowTweakW: ${shadowTweakW.toFixed(3)}, shadowTweakL: ${shadowTweakL.toFixed(3)}, shadowGapFix: ${shadowGapFix.toFixed(3)}, shadowSideFix: ${shadowSideFix.toFixed(3)}`);
+                shadowChanged = true;
                 break;
         }
-        if (!changed) return;
-        e.preventDefault();
-        beamYaw = normalizeAngle(beamYaw);
-        logBeamCoords(`manual-${e.code.toLowerCase()}`);
+
+        if (beamChanged) {
+            e.preventDefault();
+            beamYaw = normalizeAngle(beamYaw);
+            logBeamCoords(`manual-${e.code.toLowerCase()}`);
+        }
+        
+        if (shadowChanged) {
+            e.preventDefault();
+            updateGandalfShadow();
+        }
     });
 
     // Tiny pipe tucked by Gandalf's mouth line.
@@ -3509,9 +3590,17 @@ themeToggle?.addEventListener('click', () => {
 
         // Gandalf idle wind sway
         gandalf.position.y = gandalfBaseY + Math.sin(elapsed * 0.4) * 0.004;
+        const isStarePhase = beamManualPaused || beamState === BEAM_STATE.GANDALF_HOLD;
+        const shadowTargetShine = FORCE_DEBUG_SHADOW
+            ? 1
+            : (isStarePhase ? Math.max(gandalfLockStrength, 0.58) : 0);
+        const shadowLerpRate = shadowTargetShine > shadowShineStrength ? shadowFadeInRate : shadowFadeOutRate;
+        shadowShineStrength += (shadowTargetShine - shadowShineStrength) * Math.min(1, deltaTime * shadowLerpRate);
+        updateGandalfShadow();
+
         gandalfShadowMat.opacity = FORCE_DEBUG_SHADOW
             ? 0.92
-            : (0.42 + 0.23 * gandalfLockStrength);
+            : (shadowStareMaxOpacity * shadowShineStrength);
 
         // Pipe smoke: constant light wisps + grouped dark plumes.
         if (nextDarkSmokeAt === 0) {
