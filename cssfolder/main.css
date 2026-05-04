@@ -160,47 +160,61 @@ body.light-mode .hero {
     align-items: center;
 }
 
-/* Cloud band — soft grey puffs orbiting in slow circles so it reads
-   like real fog you're descending into, then settling into parchment
-   at the seam (the next "section" emerging below). */
+/* Cloud band — warm parchment-toned dust puffs orbiting + drifting so the
+   seam feels alive. Sits low against the hero bottom and overlaps just
+   slightly into the canvas. */
 body.light-mode .hero::before {
     content: '';
     position: absolute;
-    bottom: -1rem;
+    bottom: 0;
     left: -50vw;
     right: -50vw;
     height: 8rem;
     pointer-events: none;
     z-index: 1;
     background:
-        radial-gradient(ellipse 30% 60% at 50% 50%, rgba(195, 200, 215, 0.95) 0%, rgba(195, 200, 215, 0.5) 40%, transparent 80%),
-        radial-gradient(ellipse 35% 70% at 50% 50%, rgba(208, 212, 222, 0.95) 0%, rgba(208, 212, 222, 0.55) 38%, transparent 78%),
-        radial-gradient(ellipse 28% 65% at 50% 50%, rgba(188, 195, 210, 0.92) 0%, rgba(188, 195, 210, 0.5) 40%, transparent 80%),
-        radial-gradient(ellipse 32% 70% at 50% 50%, rgba(200, 205, 218, 0.95) 0%, rgba(200, 205, 218, 0.55) 40%, transparent 78%);
+        radial-gradient(ellipse 30% 60% at 50% 60%, rgba(228, 220, 200, 0.82) 0%, rgba(228, 220, 200, 0.45) 40%, transparent 80%),
+        radial-gradient(ellipse 35% 70% at 50% 60%, rgba(236, 228, 210, 0.82) 0%, rgba(236, 228, 210, 0.5) 38%, transparent 78%),
+        radial-gradient(ellipse 28% 65% at 50% 60%, rgba(220, 212, 192, 0.78) 0%, rgba(220, 212, 192, 0.45) 40%, transparent 80%),
+        radial-gradient(ellipse 32% 70% at 50% 60%, rgba(232, 224, 204, 0.82) 0%, rgba(232, 224, 204, 0.5) 40%, transparent 78%);
     background-size: 220% 240%, 250% 220%, 200% 260%, 240% 220%;
     background-repeat: no-repeat;
-    animation: cloudSwirl 22s linear infinite;
-    will-change: background-position;
+    /* Two layered animations: orbital swirl (each puff loops a circular path)
+       plus a gentler opacity breath so the band visibly thickens and thins. */
+    animation:
+        cloudSwirl 14s linear infinite,
+        cloudBreathe 7s ease-in-out infinite;
+    will-change: background-position, opacity;
+    /* Soft top fade so the puffs melt into the canvas instead of cutting off. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 100%);
 }
 
+/* Parchment fade — bridges canvas into cream. Lower and shorter than before
+   so the canvas keeps more of its real content visible. */
 body.light-mode .hero::after {
     content: '';
     position: absolute;
-    bottom: -1rem;
+    bottom: 0;
     left: -50vw;
     right: -50vw;
-    height: 7rem;
+    height: 10rem;
     pointer-events: none;
     z-index: 2;
     background: linear-gradient(to bottom,
         transparent 0%,
-        rgba(210, 215, 222, 0.08) 20%,
-        rgba(222, 220, 218, 0.22) 38%,
-        rgba(232, 226, 218, 0.5) 55%,
-        rgba(240, 235, 224, 0.82) 72%,
-        rgba(240, 235, 224, 0.97) 86%,
-        #f0ebe0 93%,
+        rgba(240, 235, 224, 0.06) 18%,
+        rgba(240, 235, 224, 0.22) 38%,
+        rgba(240, 235, 224, 0.50) 56%,
+        rgba(240, 235, 224, 0.78) 72%,
+        rgba(240, 235, 224, 0.94) 86%,
+        #f0ebe0 94%,
         #f0ebe0 100%);
+}
+
+@keyframes cloudBreathe {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1.0; }
 }
 
 /* Each puff orbits its own center on screen at a different phase,
@@ -1041,9 +1055,41 @@ body.dark footer a:hover {
     }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 640px) {
     #sauron-canvas,
     #lightModeCanvas {
+        display: none !important;
+    }
+
+    /* With the 3D scene hidden, the hero would otherwise leave a 100vh empty
+       gap above the content. Collapse it to natural content height and drop
+       the canvas-overlap fog band, since there's no canvas to fade out of. */
+    body.light-mode .hero,
+    body.dark .hero {
+        min-height: auto;
+        padding-top: 3rem;
+        padding-bottom: 2.5rem;
+    }
+    body.light-mode .hero::before,
+    body.light-mode .hero::after {
         display: none;
+    }
+
+    /* Without the dark canvas behind it, the cream hero text disappears into
+       the parchment. Revert to the base warm-brown palette for legibility. */
+    body.light-mode .subtitle {
+        color: #6b5d4f;
+    }
+    body.light-mode .links a {
+        color: #6b5d4f;
+        border-color: #c4b896;
+    }
+    body.light-mode .links a:hover {
+        color: #2c2416;
+        border-color: #8a7d3a;
+        background: rgba(138, 125, 58, 0.06);
+    }
+    body.light-mode .hero-name {
+        color: #2c2416;
     }
 }

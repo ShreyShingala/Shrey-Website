@@ -1609,7 +1609,21 @@ themeToggle?.addEventListener('click', () => {
     // ----- Camera — Gandalf left foreground, mountains cascade right, tower far right -----
     const DEFAULT_FOV = 50;
     const ZOOM_FOV = 75;
-    const camera = new THREE.PerspectiveCamera(DEFAULT_FOV, canvasW() / canvasH(), 0.01, 80);
+    // Reference aspect the scene was composed at. When the viewport gets
+    // narrower than this we widen the vertical FOV so the same horizontal
+    // extent of the scene stays visible (i.e. the camera "pulls back" in feel
+    // without actually moving — keeps Gandalf, the mountains, and the tower
+    // all in frame at narrower aspects).
+    const DESIGN_ASPECT = 1.7;
+    const MAX_RESPONSIVE_FOV = 95;
+    function computeResponsiveFov() {
+        const aspect = canvasW() / canvasH();
+        if (!isFinite(aspect) || aspect >= DESIGN_ASPECT) return DEFAULT_FOV;
+        const baseHalfTan = Math.tan(DEFAULT_FOV * Math.PI / 360);
+        const newFovDeg = 2 * Math.atan(baseHalfTan * DESIGN_ASPECT / aspect) * 180 / Math.PI;
+        return Math.min(MAX_RESPONSIVE_FOV, newFovDeg);
+    }
+    const camera = new THREE.PerspectiveCamera(computeResponsiveFov(), canvasW() / canvasH(), 0.01, 80);
     const defaultCameraPos = new THREE.Vector3(0, 0.9, 5.5);
     const defaultCameraTarget = new THREE.Vector3(0.8, -0.3, -6);
     camera.position.copy(defaultCameraPos);
@@ -1764,6 +1778,20 @@ themeToggle?.addEventListener('click', () => {
     const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(60, 35), skyMat);
     skyPlane.position.set(0, 5, -20);
     scene.add(skyPlane);
+
+    // Sky ceiling — solid zenith-colored extension above the gradient sky.
+    // Prevents the top edge of the sky plane from peeking into frame when the
+    // responsive FOV widens at narrow aspect ratios. Sits flush at Y=22.5
+    // (skyPlane top) and extends upward; same zenith tone so the seam is
+    // invisible.
+    const skyCeilingMat = new THREE.MeshBasicMaterial({
+        color: exp2Sky.zenith.clone(),
+        depthWrite: false,
+        fog: false,
+    });
+    const skyCeiling = new THREE.Mesh(new THREE.PlaneGeometry(80, 30), skyCeilingMat);
+    skyCeiling.position.set(0, 37.5, -20);
+    scene.add(skyCeiling);
     if (FOG_MODE === 'height') {
         renderer.setClearColor(heightFog.color, 1);
         skyMat.uniforms.uHorizonDissolve.value.copy(heightFog.color);
@@ -3371,9 +3399,15 @@ themeToggle?.addEventListener('click', () => {
     let previousElapsed = 0;
 
     // ----- Resize -----
+    // Recompute FOV based on aspect so narrower viewports don't crop the scene
+    // horizontally. Skip the FOV update while a transition (light↔dark zoom)
+    // is mid-tween — GSAP owns camera.fov in that window and we'd fight it.
     window.addEventListener('resize', () => {
         renderer.setSize(canvasW(), canvasH(), false);
         camera.aspect = canvasW() / canvasH();
+        if (!isTransitioningLight && !document.body.classList.contains('dark')) {
+            camera.fov = computeResponsiveFov();
+        }
         camera.updateProjectionMatrix();
     });
 
@@ -3630,6 +3664,7 @@ themeToggle?.addEventListener('click', () => {
         defaultCameraPos, defaultCameraTarget,
         baraddurPos,
         DEFAULT_FOV, ZOOM_FOV,
+        computeResponsiveFov,
         get isTransitioning() { return isTransitioningLight; },
         set isTransitioning(v) { isTransitioningLight = v; },
         get isLightMode() { return isLightMode; },
@@ -3642,7 +3677,7 @@ themeToggle?.addEventListener('click', () => {
         },
         snapToDefault() {
             camera.position.copy(defaultCameraPos);
-            camera.fov = DEFAULT_FOV;
+            camera.fov = computeResponsiveFov();
             camera.updateProjectionMatrix();
             camera.lookAt(defaultCameraTarget);
         },
@@ -3728,7 +3763,7 @@ themeToggle?.addEventListener('click', () => {
                 onUpdate: () => cam.lookAt(ls.defaultCameraTarget.x, ls.defaultCameraTarget.y, ls.defaultCameraTarget.z),
             });
             gsap.to(cam, {
-                fov: ls.DEFAULT_FOV, duration: 1.8, ease: 'power2.out', delay: 0.6,
+                fov: ls.computeResponsiveFov(), duration: 1.8, ease: 'power2.out', delay: 0.6,
                 onUpdate: () => cam.updateProjectionMatrix(),
             });
             e.stopImmediatePropagation();
