@@ -1355,6 +1355,8 @@ themeToggle?.addEventListener('click', () => {
     // ----- State -----
     let isTransitioningLight = false;
     let isLightMode = !document.body.classList.contains('dark');
+    const beamPauseToggleBtn = document.getElementById('beam-pause-toggle');
+    const beamLogCoordsBtn = document.getElementById('beam-log-coords');
 
     // Sync light-mode class with current state on init
     if (isLightMode) {
@@ -2584,10 +2586,18 @@ themeToggle?.addEventListener('click', () => {
     const lerpAngle = (from, to, t) => from + shortestAngleDelta(from, to) * t;
 
     const fullCircleDuration = 18.0;
-    const gandalfHoldDuration = 5.0;
-    const randomPhaseDurationRange = { min: 18.0, max: 30.0 };
-    const cooldownDuration = 28.0;
+    const gandalfHoldDuration = 8.0;
+    const randomPhaseDuration = 30.0;
+    const cooldownDuration = 60.0;
     const activeFadeDuration = 1.5;
+    const gandalfLockYaw = 0.1021;
+    const gandalfLockPitch = -0.0967;
+    const gandalfLockRampDuration = 2.2;
+    const gandalfHoldSpreadScale = 1.55;
+    const gandalfHoldOpacityMul = 1.6;
+    const spreadLerpRate = 3.0;
+    const randomYawRange = { min: 3.4064, max: 5.2864 };
+    const randomPitchRange = { min: -0.25, max: 0.025 };
 
     let fullCircleStartYaw = 0;
     let beamYaw = 0;
@@ -2595,7 +2605,6 @@ themeToggle?.addEventListener('click', () => {
     let beamTargetYaw = 0;
     let beamTargetPitch = 0;
 
-    let randomPhaseDuration = 0;
     let randomTargetMoveTimer = 0;
     let randomTargetHoldTimer = 0;
     let randomTargetMoveDuration = 0;
@@ -2605,6 +2614,14 @@ themeToggle?.addEventListener('click', () => {
     let randomTargetToYaw = 0;
     let randomTargetToPitch = 0;
     let isRandomTargetHolding = false;
+    let isFirstRandomMove = false;
+    let beamSpreadScale = 1;
+    let beamManualPaused = false;
+    const manualYawStep = 0.04;
+    const manualPitchStep = 0.025;
+    const tmpBeamQuat = new THREE.Quaternion();
+    const tmpBeamDir = new THREE.Vector3();
+    const tmpBeamTarget = new THREE.Vector3();
 
     const beamAzimuthOffset = (targetDir) => {
         const base = new THREE.Vector2(beamDir.x, beamDir.z).normalize();
@@ -2625,16 +2642,43 @@ themeToggle?.addEventListener('click', () => {
     let randomBeamTargets = [];
     console.log('[beam-debug] start waiting');
 
+    function refreshBeamPauseButtonText() {
+        if (!beamPauseToggleBtn) return;
+        beamPauseToggleBtn.textContent = beamManualPaused ? 'Resume Beam' : 'Pause Beam';
+    }
+
+    function logBeamCoords(reason = 'button') {
+        sauronBeamBlades.updateMatrixWorld(true);
+        sauronBeamBlades.getWorldQuaternion(tmpBeamQuat);
+        tmpBeamDir.set(0, -1, 0).applyQuaternion(tmpBeamQuat).normalize();
+        tmpBeamTarget.copy(eyeWorldPos).addScaledVector(tmpBeamDir, BEAM_LENGTH);
+        console.log('[beam-debug] beam-coords', {
+            reason,
+            yaw: Number(beamYaw.toFixed(4)),
+            pitch: Number(beamPitch.toFixed(4)),
+            target: {
+                x: Number(tmpBeamTarget.x.toFixed(3)),
+                y: Number(tmpBeamTarget.y.toFixed(3)),
+                z: Number(tmpBeamTarget.z.toFixed(3)),
+            },
+            gandalfTarget: gandalfBeamTarget
+                ? {
+                    x: Number(gandalfBeamTarget.x.toFixed(3)),
+                    y: Number(gandalfBeamTarget.y.toFixed(3)),
+                    z: Number(gandalfBeamTarget.z.toFixed(3)),
+                }
+                : null,
+        });
+    }
+
     function startRandomTargetMove(elapsed) {
-        if (!randomBeamTargets.length) return;
-        const target = randomBeamTargets[Math.floor(Math.random() * randomBeamTargets.length)];
-        const angles = directionToSweeperAngles(target);
         randomTargetFromYaw = beamYaw;
         randomTargetFromPitch = beamPitch;
-        randomTargetToYaw = angles.yaw;
-        randomTargetToPitch = angles.pitch;
-        randomTargetMoveDuration = randRange(1.2, 2.5);
-        randomTargetHoldDuration = randRange(0.9, 2.2);
+        randomTargetToYaw = randRange(randomYawRange.min, randomYawRange.max);
+        randomTargetToPitch = randRange(randomPitchRange.min, randomPitchRange.max);
+        randomTargetMoveDuration = isFirstRandomMove ? randRange(4.8, 6.2) : randRange(2.6, 4.2);
+        randomTargetHoldDuration = randRange(0.7, 1.3);
+        isFirstRandomMove = false;
         randomTargetMoveTimer = 0;
         randomTargetHoldTimer = 0;
         isRandomTargetHolding = false;
@@ -2646,11 +2690,8 @@ themeToggle?.addEventListener('click', () => {
         console.log(
             '[beam-debug] start random-move',
             {
-                to: {
-                    x: Number(target.x.toFixed(2)),
-                    y: Number(target.y.toFixed(2)),
-                    z: Number(target.z.toFixed(2)),
-                },
+                toYaw: Number(randomTargetToYaw.toFixed(4)),
+                toPitch: Number(randomTargetToPitch.toFixed(4)),
                 moveSec: Number(randomTargetMoveDuration.toFixed(2)),
                 holdSec: Number(randomTargetHoldDuration.toFixed(2)),
             }
@@ -2666,15 +2707,13 @@ themeToggle?.addEventListener('click', () => {
         beamState = nextState;
         beamStateTimer = 0;
         if (nextState === BEAM_STATE.FULL_CIRCLE) {
-            fullCircleStartYaw = normalizeAngle(beamYaw);
+            // Force the full route to start/end on Gandalf lock yaw so transition is seamless.
+            fullCircleStartYaw = gandalfLockYaw;
         } else if (nextState === BEAM_STATE.GANDALF_HOLD) {
-            if (gandalfBeamTarget) {
-                const aim = directionToSweeperAngles(gandalfBeamTarget);
-                beamTargetYaw = aim.yaw;
-                beamTargetPitch = aim.pitch;
-            }
+            beamTargetYaw = gandalfLockYaw;
+            beamTargetPitch = gandalfLockPitch;
         } else if (nextState === BEAM_STATE.RANDOM_TARGETING) {
-            randomPhaseDuration = randRange(randomPhaseDurationRange.min, randomPhaseDurationRange.max);
+            isFirstRandomMove = true;
             startRandomTargetMove(elapsed);
         }
     }
@@ -2704,19 +2743,50 @@ themeToggle?.addEventListener('click', () => {
     gandalf.renderOrder = 2;
     scene.add(gandalf);
 
-    gandalfBeamTarget = new THREE.Vector3(gandalfX, gandalfWorldY + 1.15, gandalfZ);
-    randomBeamTargets = [
-        // Mountain-focused anchors
-        new THREE.Vector3(-10.5, -1.6, -27.5),
-        new THREE.Vector3(-3.8, -1.9, -29.0),
-        new THREE.Vector3(3.5, -1.7, -27.0),
-        new THREE.Vector3(11.0, -1.5, -30.0),
-        new THREE.Vector3(17.5, -1.4, -28.5),
-        // Near-Gandalf scouting anchors
-        new THREE.Vector3(gandalfX - 2.6, gandalfWorldY + 0.35, gandalfZ - 4.5),
-        new THREE.Vector3(gandalfX + 1.6, gandalfWorldY + 0.45, gandalfZ - 5.0),
-        new THREE.Vector3(gandalfX + 3.4, gandalfWorldY + 0.7, gandalfZ - 6.3),
-    ];
+    gandalfBeamTarget = new THREE.Vector3(-11.817, -0.043, -14.862);
+    randomBeamTargets = [];
+    refreshBeamPauseButtonText();
+
+    beamPauseToggleBtn?.addEventListener('click', () => {
+        beamManualPaused = !beamManualPaused;
+        refreshBeamPauseButtonText();
+        console.log('[beam-debug]', beamManualPaused ? 'manual-pause enabled' : 'manual-pause disabled');
+        if (beamManualPaused) logBeamCoords('pause-toggle');
+    });
+
+    beamLogCoordsBtn?.addEventListener('click', () => {
+        logBeamCoords('log-button');
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (!beamManualPaused || !document.body.classList.contains('light-mode')) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
+        let changed = false;
+        switch (e.code) {
+            case 'KeyW':
+                beamPitch = THREE.MathUtils.clamp(beamPitch + manualPitchStep, -0.4, 0.4);
+                changed = true;
+                break;
+            case 'KeyS':
+                beamPitch = THREE.MathUtils.clamp(beamPitch - manualPitchStep, -0.4, 0.4);
+                changed = true;
+                break;
+            case 'KeyA':
+                beamYaw -= manualYawStep;
+                changed = true;
+                break;
+            case 'KeyD':
+                beamYaw += manualYawStep;
+                changed = true;
+                break;
+        }
+        if (!changed) return;
+        e.preventDefault();
+        beamYaw = normalizeAngle(beamYaw);
+        logBeamCoords(`manual-${e.code.toLowerCase()}`);
+    });
 
     // Tiny pipe tucked by Gandalf's mouth line.
     const pipeMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1715 });
@@ -3112,93 +3182,99 @@ themeToggle?.addEventListener('click', () => {
         }
 
         // Sauron searchlight cycle:
-        // 1) one full circle sweep, 2) Gandalf lock (3s), 3) random scenic targeting.
-        switch (beamState) {
-            case BEAM_STATE.WAITING:
-                currentOpacity = 0;
-                if (elapsed >= 5.0) {
-                    enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
-                }
-                break;
-
-            case BEAM_STATE.FULL_CIRCLE: {
-                beamStateTimer += deltaTime;
-                const t = Math.min(beamStateTimer / fullCircleDuration, 1);
-                beamYaw = fullCircleStartYaw + t * Math.PI * 2;
-                beamPitch = Math.cos(elapsed * 0.55) * 0.06;
-                const env = Math.min(1, beamStateTimer / activeFadeDuration);
-                currentOpacity = env * MAX_OPACITY;
-                if (t >= 1) {
-                    beamYaw = normalizeAngle(beamYaw);
-                    enterBeamState(BEAM_STATE.GANDALF_HOLD, elapsed);
-                }
-                break;
-            }
-
-            case BEAM_STATE.GANDALF_HOLD: {
-                beamStateTimer += deltaTime;
-                if (gandalfBeamTarget) {
-                    const aim = directionToSweeperAngles(gandalfBeamTarget);
-                    beamTargetYaw = aim.yaw + Math.sin(elapsed * 1.9) * 0.012;
-                    beamTargetPitch = aim.pitch + Math.cos(elapsed * 1.6) * 0.008;
-                    beamYaw = lerpAngle(beamYaw, beamTargetYaw, Math.min(1, deltaTime * 3.5));
-                    beamPitch += (beamTargetPitch - beamPitch) * Math.min(1, deltaTime * 3.5);
-                }
-                currentOpacity = MAX_OPACITY;
-                if (beamStateTimer >= gandalfHoldDuration) {
-                    enterBeamState(BEAM_STATE.RANDOM_TARGETING, elapsed);
-                }
-                break;
-            }
-
-            case BEAM_STATE.RANDOM_TARGETING: {
-                beamStateTimer += deltaTime;
-
-                if (!isRandomTargetHolding) {
-                    randomTargetMoveTimer += deltaTime;
-                    const moveT = Math.min(randomTargetMoveTimer / randomTargetMoveDuration, 1);
-                    const eased = moveT * moveT * (3 - 2 * moveT);
-                    beamYaw = lerpAngle(randomTargetFromYaw, randomTargetToYaw, eased);
-                    beamPitch = randomTargetFromPitch + (randomTargetToPitch - randomTargetFromPitch) * eased;
-                    if (moveT >= 1) {
-                        isRandomTargetHolding = true;
-                        console.log('[beam-debug] stop random-move');
-                        console.log('[beam-debug] start random-hold', Number(randomTargetHoldDuration.toFixed(2)), 's');
-                    }
-                } else {
-                    randomTargetHoldTimer += deltaTime;
-                    beamYaw = lerpAngle(beamYaw, randomTargetToYaw, Math.min(1, deltaTime * 4.0));
-                    beamPitch += (randomTargetToPitch - beamPitch) * Math.min(1, deltaTime * 4.0);
-                    if (randomTargetHoldTimer >= randomTargetHoldDuration) {
-                        console.log('[beam-debug] stop random-hold');
-                        startRandomTargetMove(elapsed);
-                    }
-                }
-
-                let env = 1;
-                if (beamStateTimer > randomPhaseDuration - activeFadeDuration) {
-                    env = Math.max(0, (randomPhaseDuration - beamStateTimer) / activeFadeDuration);
-                }
-                currentOpacity = env * MAX_OPACITY;
-
-                if (beamStateTimer >= randomPhaseDuration) {
-                    enterBeamState(BEAM_STATE.COOLDOWN, elapsed);
+        // 1) one full circle sweep, 2) Gandalf lock, 3) random scenic targeting.
+        let gandalfLockStrength = 0;
+        if (beamManualPaused) {
+            currentOpacity = MAX_OPACITY;
+        } else {
+            switch (beamState) {
+                case BEAM_STATE.WAITING:
                     currentOpacity = 0;
-                }
-                break;
-            }
+                    if (elapsed >= 5.0) {
+                        enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
+                    }
+                    break;
 
-            case BEAM_STATE.COOLDOWN:
-                beamStateTimer += deltaTime;
-                currentOpacity = 0;
-                if (beamStateTimer >= cooldownDuration) {
-                    enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
+                case BEAM_STATE.FULL_CIRCLE: {
+                    beamStateTimer += deltaTime;
+                    const t = Math.min(beamStateTimer / fullCircleDuration, 1);
+                    beamYaw = fullCircleStartYaw + t * Math.PI * 2;
+                    beamPitch = gandalfLockPitch + Math.sin(t * Math.PI) * 0.14;
+                    const env = Math.min(1, beamStateTimer / activeFadeDuration);
+                    currentOpacity = env * MAX_OPACITY;
+                    if (t >= 1) {
+                        beamYaw = normalizeAngle(beamYaw);
+                        enterBeamState(BEAM_STATE.GANDALF_HOLD, elapsed);
+                    }
+                    break;
                 }
-                break;
+
+                case BEAM_STATE.GANDALF_HOLD: {
+                    beamStateTimer += deltaTime;
+                    beamYaw = beamTargetYaw;
+                    beamPitch = beamTargetPitch;
+                    const holdT = Math.min(beamStateTimer / gandalfLockRampDuration, 1);
+                    gandalfLockStrength = holdT * holdT * (3 - 2 * holdT);
+                    const lockStrength = 1 + (gandalfHoldOpacityMul - 1) * gandalfLockStrength;
+                    currentOpacity = Math.min(1, MAX_OPACITY * lockStrength);
+                    if (beamStateTimer >= gandalfHoldDuration) {
+                        enterBeamState(BEAM_STATE.RANDOM_TARGETING, elapsed);
+                    }
+                    break;
+                }
+
+                case BEAM_STATE.RANDOM_TARGETING: {
+                    beamStateTimer += deltaTime;
+
+                    if (!isRandomTargetHolding) {
+                        randomTargetMoveTimer += deltaTime;
+                        const moveT = Math.min(randomTargetMoveTimer / randomTargetMoveDuration, 1);
+                        const eased = moveT * moveT * (3 - 2 * moveT);
+                        beamYaw = lerpAngle(randomTargetFromYaw, randomTargetToYaw, eased);
+                        beamPitch = randomTargetFromPitch + (randomTargetToPitch - randomTargetFromPitch) * eased;
+                        if (moveT >= 1) {
+                            isRandomTargetHolding = true;
+                            console.log('[beam-debug] stop random-move');
+                            console.log('[beam-debug] start random-hold', Number(randomTargetHoldDuration.toFixed(2)), 's');
+                        }
+                    } else {
+                        randomTargetHoldTimer += deltaTime;
+                        beamYaw = lerpAngle(beamYaw, randomTargetToYaw, Math.min(1, deltaTime * 1.8));
+                        beamPitch += (randomTargetToPitch - beamPitch) * Math.min(1, deltaTime * 1.8);
+                        if (randomTargetHoldTimer >= randomTargetHoldDuration) {
+                            console.log('[beam-debug] stop random-hold');
+                            startRandomTargetMove(elapsed);
+                        }
+                    }
+
+                    let env = 1;
+                    if (beamStateTimer > randomPhaseDuration - activeFadeDuration) {
+                        env = Math.max(0, (randomPhaseDuration - beamStateTimer) / activeFadeDuration);
+                    }
+                    currentOpacity = env * MAX_OPACITY;
+
+                    if (beamStateTimer >= randomPhaseDuration) {
+                        enterBeamState(BEAM_STATE.COOLDOWN, elapsed);
+                        currentOpacity = 0;
+                    }
+                    break;
+                }
+
+                case BEAM_STATE.COOLDOWN:
+                    beamStateTimer += deltaTime;
+                    currentOpacity = 0;
+                    if (beamStateTimer >= cooldownDuration) {
+                        enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
+                    }
+                    break;
+            }
         }
 
         sauronBeamSweeper.rotation.y = beamYaw;
         sauronBeamSweeper.rotation.z = beamPitch;
+        const targetSpreadScale = 1 + (gandalfHoldSpreadScale - 1) * gandalfLockStrength;
+        beamSpreadScale += (targetSpreadScale - beamSpreadScale) * Math.min(1, deltaTime * spreadLerpRate);
+        sauronBeamBlades.scale.set(beamSpreadScale, 1, beamSpreadScale);
 
         // Single shared material drives all blades.
         beamMaterial.opacity = currentOpacity;

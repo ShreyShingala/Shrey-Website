@@ -348,6 +348,32 @@ nav {
     color: #2c2416;
 }
 
+/* Temporary beam debug controls (light mode only) */
+.beam-debug-controls {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+body.light-mode .beam-debug-controls {
+    display: inline-flex;
+}
+
+.beam-debug-controls button {
+    border: 1px solid rgba(200, 184, 136, 0.45);
+    background: rgba(240, 235, 224, 0.72);
+    color: #5e5244;
+    padding: 0.24rem 0.45rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.beam-debug-controls button:hover {
+    border-color: rgba(200, 184, 136, 0.75);
+    color: #2c2416;
+}
+
 /* ---- The One Ring (theme toggle) ---- */
 
 #theme-toggle {
