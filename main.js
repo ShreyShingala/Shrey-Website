@@ -141,7 +141,13 @@ themeToggle?.addEventListener('click', () => {
         const pOverlay = document.getElementById('precious-overlay');
         const toggle = document.getElementById('theme-toggle');
         if (pOverlay) pOverlay.classList.add('active');
-        if (toggle) toggle.classList.add('precious-active');
+        if (toggle) {
+            toggle.classList.add('precious-active');
+            // Add flip for precious too
+            toggle.classList.remove('flipping');
+            void toggle.offsetWidth;
+            toggle.classList.add('flipping');
+        }
 
         setTimeout(() => {
             if (pOverlay) pOverlay.classList.remove('active');
@@ -2402,52 +2408,160 @@ themeToggle?.addEventListener('click', () => {
     const eyeFlameParticles = [];
     let nextEyeFlameSpawnAt = 0;
 
-    // ----- Spotlight search state machine -----
-    const SAURON_SEARCH_STATE = {
-        RESTING: 'resting',
-        SEARCHING: 'searching',
-        COOLDOWN: 'cooldown',
-    };
-    let sauronSearchState = SAURON_SEARCH_STATE.RESTING;
-    let sauronFirstSweepStarted = false;
-    let sauronSearchEndsAt = 0;
-    let sauronCooldownEndsAt = 0;
-    let sauronPrevElapsed = 0;
-    let sauronSweepSeed = Math.random() * 1000;
-
-    // Spot target must live in scene graph so spotLight tracks updates.
-    const sauronSpotTarget = new THREE.Object3D();
-    sauronSpotTarget.position.set(6.0, -2.3, -18.0);
-    scene.add(sauronSpotTarget);
-
-    const sauronSpotLight = new THREE.SpotLight(
-        0xff9d42,
-        0.0,
-        190,
-        THREE.MathUtils.degToRad(18),
-        0.44,
-        1.35
+    // ----- Spotlight search state machine (with Volumetric Beam) -----
+    // Eye is parented to the baraddur group, which is scaled (1.7, 3.0, 1.7) — local offsets must be scaled too.
+    const eyeWorldPos = new THREE.Vector3(
+        baraddurPos.x + 0.025 * baraddur.scale.x,
+        baraddurPos.y + 1.11  * baraddur.scale.y,
+        baraddurPos.z + -0.04 * baraddur.scale.z
     );
-    sauronSpotLight.position.set(baraddurPos.x, baraddurPos.y + 3.3, baraddurPos.z + 0.25);
-    sauronSpotLight.target = sauronSpotTarget;
-    sauronSpotLight.visible = false;
-    scene.add(sauronSpotLight);
 
-    function startSauronSearch(atTime) {
-        sauronFirstSweepStarted = true;
-        sauronSearchState = SAURON_SEARCH_STATE.SEARCHING;
-        sauronSearchEndsAt = atTime + rand(5.0, 10.0);
-        sauronSweepSeed = Math.random() * 1000;
-        sauronSpotLight.visible = true;
-        sauronSpotLight.intensity = 4.2;
-    }
+    // Painted CanvasTexture — pure soft glow. Gaussian falloff in both axes (no hard edges
+    // anywhere), RGB premultiplied by alpha so additive blending contributes nothing at the
+    // boundary. Bright fiery tip at canvas top (= plane top after default UV mapping), fading
+    // to rgba(0,0,0,0) at the sides and the far end.
+    const beamTex = (function makeBeamTexture() {
+        const W = 256, H = 512;
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const cx = cv.getContext('2d');
+        const img = cx.createImageData(W, H);
+        for (let y = 0; y < H; y++) {
+            const v = y / H;                                       // 0 = bright tip, 1 = far end
+            // True point at the tip → no visible glow above/below the eye. Pinched tip,
+            // big fan at the far end so the cone really spreads on the mountains.
+            const halfWidth = 0.003 + v * v * 0.55;
+            // Length envelope: peak just past the tip, gentle long tail so the wide end stays bright.
+            const lenFade = Math.exp(-Math.pow((v - 0.04) * 1.4, 2));
+            for (let x = 0; x < W; x++) {
+                const dx = ((x / W) - 0.5) / halfWidth;            // dimensionless: 0 at center, ±1 at "edge"
+                const horiz = Math.exp(-dx * dx * 2.5);            // smooth Gaussian, never hits a true zero
+                const a = lenFade * horiz;
+                // Color hot at the core (yellow-white), shifting orange→deep red along the length.
+                const r = 255;
+                const g = 230 * (1 - v) + 90 * v;
+                const b = 110 * (1 - v) + 10 * v;
+                const i = (y * W + x) * 4;
+                img.data[i]     = Math.floor(r * a);               // premultiplied: edges → black
+                img.data[i + 1] = Math.floor(g * a);
+                img.data[i + 2] = Math.floor(b * a);
+                img.data[i + 3] = Math.floor(a * 255);
+            }
+        }
+        cx.putImageData(img, 0, 0);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        return tex;
+    })();
 
-    function stopSauronSearch(now) {
-        sauronSearchState = SAURON_SEARCH_STATE.COOLDOWN;
-        sauronCooldownEndsAt = now + 45.0;
-        sauronSpotLight.intensity = 0.0;
-        sauronSpotLight.visible = false;
-    }
+    // Plane: long enough to carry past the mountains, wide enough to fan over the valley.
+    // After translate(0, -L/2, 0): bright tip sits at local (0,0,0), wide end at (0,-L,0).
+    const BEAM_WIDTH = 22;
+    const BEAM_LENGTH = 38;
+    const beamGeo = new THREE.PlaneGeometry(BEAM_WIDTH, BEAM_LENGTH);
+    beamGeo.translate(0, -BEAM_LENGTH / 2, 0);
+
+    const beamMaterial = new THREE.MeshBasicMaterial({
+        map: beamTex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        depthTest: false,                     // pure light: never occluded by terrain
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+    });
+
+    const sauronBeam = new THREE.Mesh(beamGeo, beamMaterial);
+    sauronBeam.renderOrder = 10;
+    sauronBeam.frustumCulled = false;
+    sauronBeam.visible = false;
+
+    // Aim the beam: build an orthonormal basis so that
+    //   mesh local -Y  →  direction from eye toward valley center  (wide end falls into the scene)
+    //   mesh local +Z  →  the component of (eye → camera) perpendicular to the beam direction
+    //                     (so the broad face of the plane is visible to the camera, not edge-on)
+    const valleyCenter = new THREE.Vector3(0, -1.8, -23);
+    const beamDir = valleyCenter.clone().sub(eyeWorldPos).normalize();
+    const camDir = camera.position.clone().sub(eyeWorldPos).normalize();
+    const yAxis = beamDir.clone().negate();                                                 // mesh +Y (back toward eye)
+    const zAxis = camDir.clone().addScaledVector(yAxis, -camDir.dot(yAxis)).normalize();    // mesh +Z (face camera)
+    const xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();               // mesh +X
+    const aimMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+    sauronBeam.quaternion.setFromRotationMatrix(aimMatrix);
+
+    // Sweeper: rotates around WORLD-Y at the eye for the lighthouse sweep.
+    // Pitch uses world-Z (≈ horizontal, perpendicular to the mostly -X beam) so it reads as up/down tilt.
+    const sauronBeamSweeper = new THREE.Object3D();
+    sauronBeamSweeper.rotation.order = 'YZX';
+    sauronBeamSweeper.add(sauronBeam);
+
+    // Root: positioned at the eye, NO rotation → its local axes are world axes.
+    const sauronBeamRoot = new THREE.Object3D();
+    sauronBeamRoot.position.copy(eyeWorldPos);
+    sauronBeamRoot.add(sauronBeamSweeper);
+    scene.add(sauronBeamRoot);
+
+    // Head-on halo: a billboarded radial bloom that fades in when the rotating beam aims
+    // straight at the camera (where the flat plane would degenerate into an edge-on line).
+    const haloTex = (function makeHaloTexture() {
+        const S = 256;
+        const cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        const cx = cv.getContext('2d');
+        const img = cx.createImageData(S, S);
+        const cxC = (S - 1) / 2;
+        for (let y = 0; y < S; y++) {
+            for (let x = 0; x < S; x++) {
+                const dx = (x - cxC) / cxC;
+                const dy = (y - cxC) / cxC;
+                const r2 = dx * dx + dy * dy;
+                // Bright core + smooth Gaussian falloff. Premultiplied.
+                const a = Math.exp(-r2 * 3.0) * 0.85 + Math.exp(-r2 * 14.0) * 0.55;
+                const aClamp = Math.min(1, a);
+                const i = (y * S + x) * 4;
+                img.data[i]     = Math.floor(255 * aClamp);
+                img.data[i + 1] = Math.floor(210 * aClamp);
+                img.data[i + 2] = Math.floor(90  * aClamp);
+                img.data[i + 3] = Math.floor(aClamp * 255);
+            }
+        }
+        cx.putImageData(img, 0, 0);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        return tex;
+    })();
+
+    const sauronHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: haloTex,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+    }));
+    sauronHalo.position.copy(eyeWorldPos);
+    sauronHalo.scale.set(6.5, 6.5, 1); // big enough to fully mask the edge-on plane line
+    sauronHalo.renderOrder = 11;
+    sauronHalo.frustumCulled = false;
+    sauronHalo.visible = false;
+    scene.add(sauronHalo);
+
+    // Pre-allocations for the per-frame head-on calculation.
+    const baseBeamDir = beamDir.clone();   // beamDir was the static eye → valley unit vector
+    const tmpQuat = new THREE.Quaternion();
+    const tmpBeamDir = new THREE.Vector3();
+    const tmpCamDir = new THREE.Vector3();
+
+    const BEAM_STATE = { WAITING: 0, SWEEPING: 1, COOLDOWN: 2 };
+    let beamState = BEAM_STATE.WAITING;
+    let beamStateTimer = 0;
+    let sweepDuration = 0;
+    let currentOpacity = 0;
+    const MAX_OPACITY = 0.85;
 
     // ----- Gandalf billboard — left foreground, standing on the cliff edge -----
     const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
@@ -2867,41 +2981,66 @@ themeToggle?.addEventListener('click', () => {
             eyeBlinkIntensityMul = 1.0;
         }
 
-        // Spot search state machine:
-        // first sweep starts exactly when timeline crosses 10s.
-        if (!sauronFirstSweepStarted && sauronPrevElapsed < 10.0 && elapsed >= 10.0) {
-            startSauronSearch(10.0);
+        // Sauron searchlight — fake-volumetric plane state machine
+        switch (beamState) {
+            case BEAM_STATE.WAITING:
+                if (elapsed >= 5.0) {
+                    beamState = BEAM_STATE.SWEEPING;
+                    beamStateTimer = 0;
+                    sweepDuration = 16.0 + Math.random() * 6.0; // long enough for ≥1 full revolution
+                }
+                break;
+
+            case BEAM_STATE.SWEEPING: {
+                beamStateTimer += deltaTime;
+                const FADE = 1.5;
+                let env;
+                if (beamStateTimer < FADE) {
+                    env = beamStateTimer / FADE;
+                } else if (beamStateTimer > sweepDuration - FADE) {
+                    env = Math.max(0, (sweepDuration - beamStateTimer) / FADE);
+                } else {
+                    env = 1;
+                }
+                currentOpacity = env * MAX_OPACITY;
+                if (beamStateTimer >= sweepDuration) {
+                    beamState = BEAM_STATE.COOLDOWN;
+                    beamStateTimer = 0;
+                    currentOpacity = 0;
+                }
+                break;
+            }
+
+            case BEAM_STATE.COOLDOWN:
+                beamStateTimer += deltaTime;
+                if (beamStateTimer >= 45.0) {
+                    beamState = BEAM_STATE.SWEEPING;
+                    beamStateTimer = 0;
+                    sweepDuration = 16.0 + Math.random() * 6.0; // long enough for ≥1 full revolution
+                }
+                break;
         }
 
-        if (sauronSearchState === SAURON_SEARCH_STATE.SEARCHING) {
-            if (elapsed >= sauronSearchEndsAt) {
-                stopSauronSearch(elapsed);
-            } else {
-                const t = elapsed + sauronSweepSeed;
-                const rawX = 5.0 + Math.sin(t * 0.90) * 17.5 + Math.sin(t * 2.05 + 1.3) * 4.8;
-                const rawZ = -18.5 + Math.cos(t * 0.74 + 0.8) * 10.8 + Math.sin(t * 1.6) * 3.2;
-                const targetX = THREE.MathUtils.clamp(rawX, -22.0, 18.0);
-                const targetZ = THREE.MathUtils.clamp(rawZ, -38.0, -6.0);
-                const targetY = -2.5 + Math.sin(t * 1.15 + 0.5) * 0.95;
-                const follow = 1.0 - Math.exp(-deltaTime * 3.2);
-                sauronSpotTarget.position.x += (targetX - sauronSpotTarget.position.x) * follow;
-                sauronSpotTarget.position.y += (targetY - sauronSpotTarget.position.y) * follow;
-                sauronSpotTarget.position.z += (targetZ - sauronSpotTarget.position.z) * follow;
-                sauronSpotLight.intensity = 4.0 + Math.sin(t * 2.0) * 0.35;
-                sauronSpotLight.angle = THREE.MathUtils.degToRad(17.5 + Math.sin(t * 0.85) * 1.8);
-            }
-        } else if (sauronSearchState === SAURON_SEARCH_STATE.COOLDOWN) {
-            if (elapsed >= sauronCooldownEndsAt) {
-                sauronSearchState = SAURON_SEARCH_STATE.RESTING;
-            }
-        } else if (
-            sauronSearchState === SAURON_SEARCH_STATE.RESTING &&
-            sauronFirstSweepStarted &&
-            elapsed >= sauronCooldownEndsAt
-        ) {
-            startSauronSearch(elapsed);
-        }
-        sauronPrevElapsed = elapsed;
+        // Continuous lighthouse sweep — full 360° wrap-around at the eye, plus a gentle
+        // up/down pitch (around world-Z, which reads as pitch for the mostly-X beam).
+        // Rotation rate ≈ one revolution per 14s, slow and ominous.
+        sauronBeamSweeper.rotation.y = (elapsed * (Math.PI * 2 / 14)) % (Math.PI * 2);
+        sauronBeamSweeper.rotation.z = Math.cos(elapsed * 0.32) * 0.10;
+
+        // Head-on bloom: when the beam axis aligns with the camera direction, the flat plane
+        // collapses into a line. Crossfade in a billboarded radial halo to mask the degeneracy.
+        sauronBeamSweeper.updateMatrixWorld();
+        sauronBeamSweeper.getWorldQuaternion(tmpQuat);
+        tmpBeamDir.copy(baseBeamDir).applyQuaternion(tmpQuat);
+        tmpCamDir.copy(camera.position).sub(eyeWorldPos).normalize();
+        const facing = tmpBeamDir.dot(tmpCamDir);                       // -1 (away) … +1 (straight at camera)
+        // Narrow window: halo only blooms in the brief moment the beam is genuinely aimed at
+        // the lens (~last ~25° of approach). Outside that, the eye stays at its normal brightness.
+        const haloMix = THREE.MathUtils.smoothstep(facing, 0.90, 0.985);
+        sauronBeam.material.opacity = currentOpacity * (1 - haloMix);   // plane fully gone at peak so the line vanishes
+        sauronHalo.material.opacity = currentOpacity * haloMix;
+        sauronBeam.visible = currentOpacity > 0.001 && haloMix < 0.999;
+        sauronHalo.visible = currentOpacity > 0.001 && haloMix > 0.001;
 
         const eyePulse = (Math.sin(elapsed * 0.8) + 1) * 0.5;
         const eyeOpacity = 0.7 + eyePulse * 0.3;
@@ -2979,6 +3118,15 @@ themeToggle?.addEventListener('click', () => {
         if (ls.isTransitioning) {
             e.stopImmediatePropagation();
             return;
+        }
+
+        // Add flip animation
+        const ringIcon = toggle.querySelector('.ring-icon');
+        if (ringIcon) {
+            toggle.classList.remove('flipping');
+            void toggle.offsetWidth; // Trigger reflow
+            toggle.classList.add('flipping');
+            setTimeout(() => toggle.classList.remove('flipping'), 600);
         }
 
         const wasDark = document.body.classList.contains('dark');
