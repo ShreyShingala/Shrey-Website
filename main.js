@@ -816,45 +816,80 @@ themeToggle?.addEventListener('click', () => {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
 
-        const angle = Math.atan2(dy, dx);
-        const perpX = Math.sin(angle);
-        const perpY = -Math.cos(angle);
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+        const perpX = -dirY;
+        const perpY = dirX;
 
         // Flickering intensity
-        const flick = 0.06 + Math.sin(time * 0.005) * 0.025 + Math.sin(time * 0.013) * 0.015;
+        const flick = 0.05 + Math.sin(time * 0.005) * 0.02 + Math.sin(time * 0.013) * 0.012;
         const alpha = flick * openness;
 
-        // Wide soft glow beam
-        const glowW = 20 * openness;
+        // Wide soft body of the beam
+        const glowWStart = 18 * openness;
+        const glowWEnd = 10;
         const glowGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        glowGrad.addColorStop(0, `rgba(255, 100, 0, ${alpha * 0.5})`);
-        glowGrad.addColorStop(0.4, `rgba(255, 60, 0, ${alpha * 0.2})`);
-        glowGrad.addColorStop(1, 'rgba(255, 40, 0, 0)');
+        glowGrad.addColorStop(0, `rgba(255, 120, 25, ${alpha * 0.24})`);
+        glowGrad.addColorStop(0.45, `rgba(255, 80, 15, ${alpha * 0.14})`);
+        glowGrad.addColorStop(1, 'rgba(255, 60, 12, 0)');
 
         ctx.beginPath();
-        ctx.moveTo(eyeX + perpX * glowW, eyeY + perpY * glowW);
-        ctx.lineTo(smoothMouse.x + perpX * 12, smoothMouse.y + perpY * 12);
-        ctx.lineTo(smoothMouse.x - perpX * 12, smoothMouse.y - perpY * 12);
-        ctx.lineTo(eyeX - perpX * glowW, eyeY - perpY * glowW);
+        ctx.moveTo(eyeX + perpX * glowWStart, eyeY + perpY * glowWStart);
+        ctx.lineTo(smoothMouse.x + perpX * glowWEnd, smoothMouse.y + perpY * glowWEnd);
+        ctx.lineTo(smoothMouse.x - perpX * glowWEnd, smoothMouse.y - perpY * glowWEnd);
+        ctx.lineTo(eyeX - perpX * glowWStart, eyeY - perpY * glowWStart);
         ctx.closePath();
         ctx.fillStyle = glowGrad;
         ctx.fill();
 
-        // Narrow bright core beam
-        const coreW = 5 * openness;
-        const coreGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        coreGrad.addColorStop(0, `rgba(255, 160, 40, ${alpha * 1.8})`);
-        coreGrad.addColorStop(0.3, `rgba(255, 100, 0, ${alpha * 1.0})`);
-        coreGrad.addColorStop(1, 'rgba(255, 80, 0, 0)');
+        // Circular beam formation: multiple thin slices wrapped around the axis.
+        // This avoids a single hard center line and reads more volumetric.
+        const sliceCount = 10;
+        for (let i = 0; i < sliceCount; i++) {
+            const phase = (i / sliceCount) * Math.PI * 2 + time * 0.0012;
+            const ringEye = (5.5 + Math.sin(time * 0.0017 + i * 1.3) * 2.2) * openness;
+            const ringTip = 2.6 + Math.sin(time * 0.002 + i * 0.9) * 0.75;
+            const axialSkew = Math.sin(phase) * ringEye * 0.22;
 
+            const offsetEyeX = perpX * Math.cos(phase) * ringEye + dirX * axialSkew;
+            const offsetEyeY = perpY * Math.cos(phase) * ringEye + dirY * axialSkew;
+            const offsetTipX = perpX * Math.cos(phase) * ringTip + dirX * axialSkew * 0.35;
+            const offsetTipY = perpY * Math.cos(phase) * ringTip + dirY * axialSkew * 0.35;
+
+            const startX = eyeX + offsetEyeX;
+            const startY = eyeY + offsetEyeY;
+            const endX = smoothMouse.x + offsetTipX;
+            const endY = smoothMouse.y + offsetTipY;
+
+            const wobble = Math.sin(time * 0.003 + i * 1.7) * 6;
+            const ctrlX = (startX + endX) * 0.5 + perpX * wobble;
+            const ctrlY = (startY + endY) * 0.5 + perpY * wobble;
+
+            const sliceGrad = ctx.createLinearGradient(startX, startY, endX, endY);
+            sliceGrad.addColorStop(0, `rgba(255, 165, 55, ${alpha * 0.22})`);
+            sliceGrad.addColorStop(0.35, `rgba(255, 105, 20, ${alpha * 0.14})`);
+            sliceGrad.addColorStop(1, 'rgba(255, 70, 15, 0)');
+            ctx.strokeStyle = sliceGrad;
+            ctx.lineWidth = 1.4 + Math.sin(time * 0.0022 + i) * 0.45;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+            ctx.stroke();
+        }
+
+        // Soft center pass to keep beam cohesion without recreating a harsh line.
+        const centerGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
+        centerGrad.addColorStop(0, `rgba(255, 180, 70, ${alpha * 0.18})`);
+        centerGrad.addColorStop(0.5, `rgba(255, 120, 35, ${alpha * 0.09})`);
+        centerGrad.addColorStop(1, 'rgba(255, 80, 20, 0)');
+        ctx.strokeStyle = centerGrad;
+        ctx.lineWidth = 3.2 * openness;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(eyeX + perpX * coreW, eyeY + perpY * coreW);
-        ctx.lineTo(smoothMouse.x + perpX * 2, smoothMouse.y + perpY * 2);
-        ctx.lineTo(smoothMouse.x - perpX * 2, smoothMouse.y - perpY * 2);
-        ctx.lineTo(eyeX - perpX * coreW, eyeY - perpY * coreW);
-        ctx.closePath();
-        ctx.fillStyle = coreGrad;
-        ctx.fill();
+        ctx.moveTo(eyeX, eyeY);
+        ctx.lineTo(smoothMouse.x, smoothMouse.y);
+        ctx.stroke();
 
         ctx.restore();
     }
@@ -2473,29 +2508,43 @@ themeToggle?.addEventListener('click', () => {
         blending: THREE.AdditiveBlending,
     });
 
-    const sauronBeam = new THREE.Mesh(beamGeo, beamMaterial);
-    sauronBeam.renderOrder = 10;
-    sauronBeam.frustumCulled = false;
-    sauronBeam.visible = false;
-
-    // Aim the beam: build an orthonormal basis so that
-    //   mesh local -Y  →  direction from eye toward valley center  (wide end falls into the scene)
-    //   mesh local +Z  →  the component of (eye → camera) perpendicular to the beam direction
-    //                     (so the broad face of the plane is visible to the camera, not edge-on)
+    // Aim quaternion: orient so the local -Y of any blade aligns with the eye → valley
+    // direction (wide end falls into the scene). Plane normal lands wherever — for blades
+    // arrangement we don't try to face camera; instead we fan many planes around the beam
+    // axis so SOMETHING is broadside from any view.
     const valleyCenter = new THREE.Vector3(0, -1.8, -23);
     const beamDir = valleyCenter.clone().sub(eyeWorldPos).normalize();
-    const camDir = camera.position.clone().sub(eyeWorldPos).normalize();
-    const yAxis = beamDir.clone().negate();                                                 // mesh +Y (back toward eye)
-    const zAxis = camDir.clone().addScaledVector(yAxis, -camDir.dot(yAxis)).normalize();    // mesh +Z (face camera)
-    const xAxis = new THREE.Vector3().crossVectors(yAxis, zAxis).normalize();               // mesh +X
+    const yAxis = beamDir.clone().negate();                                          // mesh +Y points back to eye
+    // Pick any horizontal axis perpendicular to yAxis as the initial reference for blade #0.
+    const helper = Math.abs(yAxis.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+    const xAxis = new THREE.Vector3().crossVectors(yAxis, helper).normalize();
+    const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
     const aimMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-    sauronBeam.quaternion.setFromRotationMatrix(aimMatrix);
+    const aimQuaternion = new THREE.Quaternion().setFromRotationMatrix(aimMatrix);
 
     // Sweeper: rotates around WORLD-Y at the eye for the lighthouse sweep.
     // Pitch uses world-Z (≈ horizontal, perpendicular to the mostly -X beam) so it reads as up/down tilt.
     const sauronBeamSweeper = new THREE.Object3D();
     sauronBeamSweeper.rotation.order = 'YZX';
-    sauronBeamSweeper.add(sauronBeam);
+
+    // Blade group: aim quaternion goes here once. Each blade is a child with only a local
+    // rotation around its own Y (= beam length axis), fanning the planes around the beam.
+    // From any side angle several blades are broadside; from dead-on the bright pinched tips
+    // additively pile up into a circular bloom — no special-case halo needed.
+    const sauronBeamBlades = new THREE.Object3D();
+    sauronBeamBlades.quaternion.copy(aimQuaternion);
+    sauronBeamSweeper.add(sauronBeamBlades);
+
+    const NUM_BLADES = 6; // DoubleSide → each blade represents 2 facings, so 6 = 12 effective rays
+    const blades = [];
+    for (let i = 0; i < NUM_BLADES; i++) {
+        const blade = new THREE.Mesh(beamGeo, beamMaterial); // shared geo + material
+        blade.rotation.y = (i / NUM_BLADES) * Math.PI;       // spin around beam length axis
+        blade.renderOrder = 10;
+        blade.frustumCulled = false;
+        sauronBeamBlades.add(blade);
+        blades.push(blade);
+    }
 
     // Root: positioned at the eye, NO rotation → its local axes are world axes.
     const sauronBeamRoot = new THREE.Object3D();
@@ -2503,65 +2552,132 @@ themeToggle?.addEventListener('click', () => {
     sauronBeamRoot.add(sauronBeamSweeper);
     scene.add(sauronBeamRoot);
 
-    // Head-on halo: a billboarded radial bloom that fades in when the rotating beam aims
-    // straight at the camera (where the flat plane would degenerate into an edge-on line).
-    const haloTex = (function makeHaloTexture() {
-        const S = 256;
-        const cv = document.createElement('canvas');
-        cv.width = S; cv.height = S;
-        const cx = cv.getContext('2d');
-        const img = cx.createImageData(S, S);
-        const cxC = (S - 1) / 2;
-        for (let y = 0; y < S; y++) {
-            for (let x = 0; x < S; x++) {
-                const dx = (x - cxC) / cxC;
-                const dy = (y - cxC) / cxC;
-                const r2 = dx * dx + dy * dy;
-                // Bright core + smooth Gaussian falloff. Premultiplied.
-                const a = Math.exp(-r2 * 3.0) * 0.85 + Math.exp(-r2 * 14.0) * 0.55;
-                const aClamp = Math.min(1, a);
-                const i = (y * S + x) * 4;
-                img.data[i]     = Math.floor(255 * aClamp);
-                img.data[i + 1] = Math.floor(210 * aClamp);
-                img.data[i + 2] = Math.floor(90  * aClamp);
-                img.data[i + 3] = Math.floor(aClamp * 255);
-            }
-        }
-        cx.putImageData(img, 0, 0);
-        const tex = new THREE.CanvasTexture(cv);
-        tex.minFilter = THREE.LinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
-        return tex;
-    })();
-
-    const sauronHalo = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: haloTex,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        depthTest: false,
-        blending: THREE.AdditiveBlending,
-    }));
-    sauronHalo.position.copy(eyeWorldPos);
-    sauronHalo.scale.set(6.5, 6.5, 1); // big enough to fully mask the edge-on plane line
-    sauronHalo.renderOrder = 11;
-    sauronHalo.frustumCulled = false;
-    sauronHalo.visible = false;
-    scene.add(sauronHalo);
-
-    // Pre-allocations for the per-frame head-on calculation.
-    const baseBeamDir = beamDir.clone();   // beamDir was the static eye → valley unit vector
-    const tmpQuat = new THREE.Quaternion();
-    const tmpBeamDir = new THREE.Vector3();
-    const tmpCamDir = new THREE.Vector3();
-
-    const BEAM_STATE = { WAITING: 0, SWEEPING: 1, COOLDOWN: 2 };
+    const BEAM_STATE = {
+        WAITING: 0,
+        FULL_CIRCLE: 1,
+        GANDALF_HOLD: 2,
+        RANDOM_TARGETING: 3,
+        COOLDOWN: 4,
+    };
+    const BEAM_STATE_LABEL = {
+        [BEAM_STATE.WAITING]: 'waiting',
+        [BEAM_STATE.FULL_CIRCLE]: 'full-sweep',
+        [BEAM_STATE.GANDALF_HOLD]: 'gandalf-look',
+        [BEAM_STATE.RANDOM_TARGETING]: 'random-targeting',
+        [BEAM_STATE.COOLDOWN]: 'cooldown',
+    };
     let beamState = BEAM_STATE.WAITING;
     let beamStateTimer = 0;
-    let sweepDuration = 0;
     let currentOpacity = 0;
-    const MAX_OPACITY = 0.85;
+    // Per-blade peak opacity. With NUM_BLADES additively blending, the visual brightness ≈
+    // MAX_OPACITY × (visible-blade count from current view), so this stays well below 1.
+    const MAX_OPACITY = 0.22;
+    const randRange = (min, max) => min + Math.random() * (max - min);
+    const normalizeAngle = (a) => {
+        const twopi = Math.PI * 2;
+        return ((a % twopi) + twopi) % twopi;
+    };
+    const shortestAngleDelta = (from, to) => {
+        const twopi = Math.PI * 2;
+        return ((((to - from) + Math.PI) % twopi) + twopi) % twopi - Math.PI;
+    };
+    const lerpAngle = (from, to, t) => from + shortestAngleDelta(from, to) * t;
+
+    const fullCircleDuration = 18.0;
+    const gandalfHoldDuration = 5.0;
+    const randomPhaseDurationRange = { min: 18.0, max: 30.0 };
+    const cooldownDuration = 28.0;
+    const activeFadeDuration = 1.5;
+
+    let fullCircleStartYaw = 0;
+    let beamYaw = 0;
+    let beamPitch = 0;
+    let beamTargetYaw = 0;
+    let beamTargetPitch = 0;
+
+    let randomPhaseDuration = 0;
+    let randomTargetMoveTimer = 0;
+    let randomTargetHoldTimer = 0;
+    let randomTargetMoveDuration = 0;
+    let randomTargetHoldDuration = 0;
+    let randomTargetFromYaw = 0;
+    let randomTargetFromPitch = 0;
+    let randomTargetToYaw = 0;
+    let randomTargetToPitch = 0;
+    let isRandomTargetHolding = false;
+
+    const beamAzimuthOffset = (targetDir) => {
+        const base = new THREE.Vector2(beamDir.x, beamDir.z).normalize();
+        const next = new THREE.Vector2(targetDir.x, targetDir.z).normalize();
+        const cross = base.x * next.y - base.y * next.x;
+        const dot = THREE.MathUtils.clamp(base.dot(next), -1, 1);
+        return Math.atan2(cross, dot);
+    };
+
+    const directionToSweeperAngles = (targetWorldPos) => {
+        const dir = targetWorldPos.clone().sub(eyeWorldPos).normalize();
+        const yaw = beamAzimuthOffset(dir);
+        const pitch = THREE.MathUtils.clamp((dir.y - beamDir.y) * 1.25, -0.24, 0.24);
+        return { yaw, pitch };
+    };
+
+    let gandalfBeamTarget = null;
+    let randomBeamTargets = [];
+    console.log('[beam-debug] start waiting');
+
+    function startRandomTargetMove(elapsed) {
+        if (!randomBeamTargets.length) return;
+        const target = randomBeamTargets[Math.floor(Math.random() * randomBeamTargets.length)];
+        const angles = directionToSweeperAngles(target);
+        randomTargetFromYaw = beamYaw;
+        randomTargetFromPitch = beamPitch;
+        randomTargetToYaw = angles.yaw;
+        randomTargetToPitch = angles.pitch;
+        randomTargetMoveDuration = randRange(1.2, 2.5);
+        randomTargetHoldDuration = randRange(0.9, 2.2);
+        randomTargetMoveTimer = 0;
+        randomTargetHoldTimer = 0;
+        isRandomTargetHolding = false;
+        beamStateTimer = Math.max(beamStateTimer, 0);
+        if (typeof elapsed === 'number') {
+            // tiny deterministic jitter anchor so repeated states don't feel robotic
+            randomTargetToPitch += Math.sin(elapsed * 1.7) * 0.01;
+        }
+        console.log(
+            '[beam-debug] start random-move',
+            {
+                to: {
+                    x: Number(target.x.toFixed(2)),
+                    y: Number(target.y.toFixed(2)),
+                    z: Number(target.z.toFixed(2)),
+                },
+                moveSec: Number(randomTargetMoveDuration.toFixed(2)),
+                holdSec: Number(randomTargetHoldDuration.toFixed(2)),
+            }
+        );
+    }
+
+    function enterBeamState(nextState, elapsed) {
+        const prevState = beamState;
+        if (prevState !== nextState) {
+            console.log('[beam-debug] stop', BEAM_STATE_LABEL[prevState], 'at', Number(beamStateTimer.toFixed(2)), 's');
+            console.log('[beam-debug] start', BEAM_STATE_LABEL[nextState]);
+        }
+        beamState = nextState;
+        beamStateTimer = 0;
+        if (nextState === BEAM_STATE.FULL_CIRCLE) {
+            fullCircleStartYaw = normalizeAngle(beamYaw);
+        } else if (nextState === BEAM_STATE.GANDALF_HOLD) {
+            if (gandalfBeamTarget) {
+                const aim = directionToSweeperAngles(gandalfBeamTarget);
+                beamTargetYaw = aim.yaw;
+                beamTargetPitch = aim.pitch;
+            }
+        } else if (nextState === BEAM_STATE.RANDOM_TARGETING) {
+            randomPhaseDuration = randRange(randomPhaseDurationRange.min, randomPhaseDurationRange.max);
+            startRandomTargetMove(elapsed);
+        }
+    }
 
     // ----- Gandalf billboard — left foreground, standing on the cliff edge -----
     const gandalfTexture = new THREE.TextureLoader().load('Images/gandalf.png');
@@ -2587,6 +2703,20 @@ themeToggle?.addEventListener('click', () => {
     gandalf.rotation.y = 0.0; // facing right toward the tower (back of cloak to camera)
     gandalf.renderOrder = 2;
     scene.add(gandalf);
+
+    gandalfBeamTarget = new THREE.Vector3(gandalfX, gandalfWorldY + 1.15, gandalfZ);
+    randomBeamTargets = [
+        // Mountain-focused anchors
+        new THREE.Vector3(-10.5, -1.6, -27.5),
+        new THREE.Vector3(-3.8, -1.9, -29.0),
+        new THREE.Vector3(3.5, -1.7, -27.0),
+        new THREE.Vector3(11.0, -1.5, -30.0),
+        new THREE.Vector3(17.5, -1.4, -28.5),
+        // Near-Gandalf scouting anchors
+        new THREE.Vector3(gandalfX - 2.6, gandalfWorldY + 0.35, gandalfZ - 4.5),
+        new THREE.Vector3(gandalfX + 1.6, gandalfWorldY + 0.45, gandalfZ - 5.0),
+        new THREE.Vector3(gandalfX + 3.4, gandalfWorldY + 0.7, gandalfZ - 6.3),
+    ];
 
     // Tiny pipe tucked by Gandalf's mouth line.
     const pipeMaterial = new THREE.MeshBasicMaterial({ color: 0x1c1715 });
@@ -2981,31 +3111,78 @@ themeToggle?.addEventListener('click', () => {
             eyeBlinkIntensityMul = 1.0;
         }
 
-        // Sauron searchlight — fake-volumetric plane state machine
+        // Sauron searchlight cycle:
+        // 1) one full circle sweep, 2) Gandalf lock (3s), 3) random scenic targeting.
         switch (beamState) {
             case BEAM_STATE.WAITING:
+                currentOpacity = 0;
                 if (elapsed >= 5.0) {
-                    beamState = BEAM_STATE.SWEEPING;
-                    beamStateTimer = 0;
-                    sweepDuration = 16.0 + Math.random() * 6.0; // long enough for ≥1 full revolution
+                    enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
                 }
                 break;
 
-            case BEAM_STATE.SWEEPING: {
+            case BEAM_STATE.FULL_CIRCLE: {
                 beamStateTimer += deltaTime;
-                const FADE = 1.5;
-                let env;
-                if (beamStateTimer < FADE) {
-                    env = beamStateTimer / FADE;
-                } else if (beamStateTimer > sweepDuration - FADE) {
-                    env = Math.max(0, (sweepDuration - beamStateTimer) / FADE);
+                const t = Math.min(beamStateTimer / fullCircleDuration, 1);
+                beamYaw = fullCircleStartYaw + t * Math.PI * 2;
+                beamPitch = Math.cos(elapsed * 0.55) * 0.06;
+                const env = Math.min(1, beamStateTimer / activeFadeDuration);
+                currentOpacity = env * MAX_OPACITY;
+                if (t >= 1) {
+                    beamYaw = normalizeAngle(beamYaw);
+                    enterBeamState(BEAM_STATE.GANDALF_HOLD, elapsed);
+                }
+                break;
+            }
+
+            case BEAM_STATE.GANDALF_HOLD: {
+                beamStateTimer += deltaTime;
+                if (gandalfBeamTarget) {
+                    const aim = directionToSweeperAngles(gandalfBeamTarget);
+                    beamTargetYaw = aim.yaw + Math.sin(elapsed * 1.9) * 0.012;
+                    beamTargetPitch = aim.pitch + Math.cos(elapsed * 1.6) * 0.008;
+                    beamYaw = lerpAngle(beamYaw, beamTargetYaw, Math.min(1, deltaTime * 3.5));
+                    beamPitch += (beamTargetPitch - beamPitch) * Math.min(1, deltaTime * 3.5);
+                }
+                currentOpacity = MAX_OPACITY;
+                if (beamStateTimer >= gandalfHoldDuration) {
+                    enterBeamState(BEAM_STATE.RANDOM_TARGETING, elapsed);
+                }
+                break;
+            }
+
+            case BEAM_STATE.RANDOM_TARGETING: {
+                beamStateTimer += deltaTime;
+
+                if (!isRandomTargetHolding) {
+                    randomTargetMoveTimer += deltaTime;
+                    const moveT = Math.min(randomTargetMoveTimer / randomTargetMoveDuration, 1);
+                    const eased = moveT * moveT * (3 - 2 * moveT);
+                    beamYaw = lerpAngle(randomTargetFromYaw, randomTargetToYaw, eased);
+                    beamPitch = randomTargetFromPitch + (randomTargetToPitch - randomTargetFromPitch) * eased;
+                    if (moveT >= 1) {
+                        isRandomTargetHolding = true;
+                        console.log('[beam-debug] stop random-move');
+                        console.log('[beam-debug] start random-hold', Number(randomTargetHoldDuration.toFixed(2)), 's');
+                    }
                 } else {
-                    env = 1;
+                    randomTargetHoldTimer += deltaTime;
+                    beamYaw = lerpAngle(beamYaw, randomTargetToYaw, Math.min(1, deltaTime * 4.0));
+                    beamPitch += (randomTargetToPitch - beamPitch) * Math.min(1, deltaTime * 4.0);
+                    if (randomTargetHoldTimer >= randomTargetHoldDuration) {
+                        console.log('[beam-debug] stop random-hold');
+                        startRandomTargetMove(elapsed);
+                    }
+                }
+
+                let env = 1;
+                if (beamStateTimer > randomPhaseDuration - activeFadeDuration) {
+                    env = Math.max(0, (randomPhaseDuration - beamStateTimer) / activeFadeDuration);
                 }
                 currentOpacity = env * MAX_OPACITY;
-                if (beamStateTimer >= sweepDuration) {
-                    beamState = BEAM_STATE.COOLDOWN;
-                    beamStateTimer = 0;
+
+                if (beamStateTimer >= randomPhaseDuration) {
+                    enterBeamState(BEAM_STATE.COOLDOWN, elapsed);
                     currentOpacity = 0;
                 }
                 break;
@@ -3013,34 +3190,19 @@ themeToggle?.addEventListener('click', () => {
 
             case BEAM_STATE.COOLDOWN:
                 beamStateTimer += deltaTime;
-                if (beamStateTimer >= 45.0) {
-                    beamState = BEAM_STATE.SWEEPING;
-                    beamStateTimer = 0;
-                    sweepDuration = 16.0 + Math.random() * 6.0; // long enough for ≥1 full revolution
+                currentOpacity = 0;
+                if (beamStateTimer >= cooldownDuration) {
+                    enterBeamState(BEAM_STATE.FULL_CIRCLE, elapsed);
                 }
                 break;
         }
 
-        // Continuous lighthouse sweep — full 360° wrap-around at the eye, plus a gentle
-        // up/down pitch (around world-Z, which reads as pitch for the mostly-X beam).
-        // Rotation rate ≈ one revolution per 14s, slow and ominous.
-        sauronBeamSweeper.rotation.y = (elapsed * (Math.PI * 2 / 14)) % (Math.PI * 2);
-        sauronBeamSweeper.rotation.z = Math.cos(elapsed * 0.32) * 0.10;
+        sauronBeamSweeper.rotation.y = beamYaw;
+        sauronBeamSweeper.rotation.z = beamPitch;
 
-        // Head-on bloom: when the beam axis aligns with the camera direction, the flat plane
-        // collapses into a line. Crossfade in a billboarded radial halo to mask the degeneracy.
-        sauronBeamSweeper.updateMatrixWorld();
-        sauronBeamSweeper.getWorldQuaternion(tmpQuat);
-        tmpBeamDir.copy(baseBeamDir).applyQuaternion(tmpQuat);
-        tmpCamDir.copy(camera.position).sub(eyeWorldPos).normalize();
-        const facing = tmpBeamDir.dot(tmpCamDir);                       // -1 (away) … +1 (straight at camera)
-        // Narrow window: halo only blooms in the brief moment the beam is genuinely aimed at
-        // the lens (~last ~25° of approach). Outside that, the eye stays at its normal brightness.
-        const haloMix = THREE.MathUtils.smoothstep(facing, 0.90, 0.985);
-        sauronBeam.material.opacity = currentOpacity * (1 - haloMix);   // plane fully gone at peak so the line vanishes
-        sauronHalo.material.opacity = currentOpacity * haloMix;
-        sauronBeam.visible = currentOpacity > 0.001 && haloMix < 0.999;
-        sauronHalo.visible = currentOpacity > 0.001 && haloMix > 0.001;
+        // Single shared material drives all blades.
+        beamMaterial.opacity = currentOpacity;
+        sauronBeamBlades.visible = currentOpacity > 0.001;
 
         const eyePulse = (Math.sin(elapsed * 0.8) + 1) * 0.5;
         const eyeOpacity = 0.7 + eyePulse * 0.3;
