@@ -111,14 +111,154 @@ body.light-mode .hero > .divider {
     z-index: 3;
 }
 
-/* Fog overlay (warm ember burn used by the toggle transition) */
-#fogOverlay {
+/* Rolling fog overlay used by the light↔dark toggle transition. Four
+   layered grey fog masses sweep in from the left and right edges with
+   internal background-position churn (cloud puffs scrolling within each
+   layer) plus a subtle drift, all warped continuously by an SVG turbulence
+   filter so the edges read as wispy, organic, real fog instead of sliding
+   gradient blobs. */
+#fog-overlay {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: 200; /* above precious-overlay (11), nav (103), footer (102) */
+    pointer-events: none;
+    overflow: hidden;
+    background-color: rgba(170, 174, 180, 0);
+    will-change: background-color;
+}
+
+#fog-overlay.active {
+    animation: fog-bg 2200ms cubic-bezier(0.42, 0, 0.58, 1) forwards;
+}
+
+@keyframes fog-bg {
+    0%   { background-color: rgba(170, 174, 180, 0);   }
+    42%  { background-color: rgba(170, 174, 180, 0.92);}
+    58%  { background-color: rgba(170, 174, 180, 0.92);}
+    100% { background-color: rgba(170, 174, 180, 0);   }
+}
+
+.fog-layer {
+    position: absolute;
+    inset: -40%; /* extend well beyond viewport so wisps can drift in/out and the displacement filter has room */
     pointer-events: none;
     opacity: 0;
-    background: radial-gradient(ellipse at 82% 18%, #c8a882 0%, #1a1008 55%, #000000 100%);
+    will-change: transform, opacity, background-position;
+    transform-origin: 50% 50%;
+    background-repeat: no-repeat;
+    /* SVG turbulence filter morphs the gradient blobs into wispy fog edges */
+    filter: url(#fog-turbulence) blur(4px);
+}
+
+/* Back layers — blurrier, denser, slower-moving */
+.fog-1 {
+    background-image:
+        radial-gradient(ellipse 55% 50% at 30% 40%, rgba(225, 227, 232, 0.95), transparent 65%),
+        radial-gradient(ellipse 50% 55% at 70% 60%, rgba(185, 188, 195, 0.9),  transparent 60%),
+        radial-gradient(ellipse 45% 50% at 50% 85%, rgba(160, 164, 172, 0.85), transparent 70%);
+    background-size: 140% 130%;
+    filter: url(#fog-turbulence) blur(7px);
+}
+
+.fog-3 {
+    background-image:
+        radial-gradient(ellipse 55% 50% at 70% 35%, rgba(220, 222, 228, 0.92), transparent 65%),
+        radial-gradient(ellipse 60% 55% at 35% 65%, rgba(175, 178, 186, 0.88), transparent 60%),
+        radial-gradient(ellipse 45% 55% at 80% 80%, rgba(195, 198, 205, 0.85), transparent 65%);
+    background-size: 145% 135%;
+    filter: url(#fog-turbulence) blur(7px);
+}
+
+/* Front layers — sharper, brighter wisps */
+.fog-2 {
+    background-image:
+        radial-gradient(ellipse 60% 50% at 35% 30%, rgba(235, 237, 240, 0.92), transparent 60%),
+        radial-gradient(ellipse 55% 55% at 70% 70%, rgba(195, 198, 204, 0.85), transparent 65%),
+        radial-gradient(ellipse 40% 45% at 20% 75%, rgba(210, 213, 220, 0.78), transparent 65%);
+    background-size: 130% 125%;
+    filter: url(#fog-turbulence) blur(2.5px);
+}
+
+.fog-4 {
+    background-image:
+        radial-gradient(ellipse 60% 50% at 65% 25%, rgba(238, 240, 244, 0.92), transparent 60%),
+        radial-gradient(ellipse 55% 55% at 30% 75%, rgba(195, 198, 204, 0.88), transparent 65%),
+        radial-gradient(ellipse 40% 45% at 80% 75%, rgba(212, 215, 222, 0.78), transparent 65%);
+    background-size: 130% 125%;
+    filter: url(#fog-turbulence) blur(2.5px);
+}
+
+/* Each layer runs TWO simultaneous animations:
+     drift = overall layer translates across the viewport with subtle scale + tilt
+     churn = background-position scrolls so cloud puffs move WITHIN the layer at a different rate
+   The two together create parallax + internal motion that reads as real rolling fog. */
+#fog-overlay.active .fog-1 { animation: fog-drift-left-back   2200ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
+                                          fog-churn-a 2200ms linear forwards; }
+#fog-overlay.active .fog-2 { animation: fog-drift-left-front  2200ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
+                                          fog-churn-b 2200ms linear forwards; }
+#fog-overlay.active .fog-3 { animation: fog-drift-right-back  2200ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
+                                          fog-churn-c 2200ms linear forwards; }
+#fog-overlay.active .fog-4 { animation: fog-drift-right-front 2200ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
+                                          fog-churn-d 2200ms linear forwards; }
+
+/* DRIFT keyframes — slow translate + tiny tilt + gentle scale pulse. Rotation kept small
+   (≤7°) because real fog doesn't pinwheel; the swirling feeling comes from the filter. */
+@keyframes fog-drift-left-back {
+    0%   { transform: translate(-90%, 4%)  rotate(-3deg) scale(1.08); opacity: 0;   }
+    22%  { transform: translate(-40%, 1%)  rotate(-1deg) scale(1.14); opacity: 0.7; }
+    45%  { transform: translate(-5%, 2%)   rotate(1deg)  scale(1.20); opacity: 1;   }
+    58%  { transform: translate(8%, -1%)   rotate(2deg)  scale(1.22); opacity: 1;   }
+    78%  { transform: translate(45%, 3%)   rotate(4deg)  scale(1.28); opacity: 0.5; }
+    100% { transform: translate(95%, 1%)   rotate(6deg)  scale(1.36); opacity: 0;   }
+}
+
+@keyframes fog-drift-left-front {
+    0%   { transform: translate(-100%, 6%) rotate(2deg)  scale(1.05); opacity: 0;    }
+    25%  { transform: translate(-42%, 3%)  rotate(0deg)  scale(1.13); opacity: 0.75; }
+    50%  { transform: translate(-2%, -3%)  rotate(-2deg) scale(1.18); opacity: 1;    }
+    72%  { transform: translate(40%, 1%)   rotate(-4deg) scale(1.24); opacity: 0.55; }
+    100% { transform: translate(100%, -4%) rotate(-6deg) scale(1.30); opacity: 0;    }
+}
+
+@keyframes fog-drift-right-back {
+    0%   { transform: translate(90%, -2%)  rotate(3deg)  scale(1.08); opacity: 0;   }
+    22%  { transform: translate(40%, 2%)   rotate(1deg)  scale(1.14); opacity: 0.7; }
+    45%  { transform: translate(5%, -2%)   rotate(-1deg) scale(1.20); opacity: 1;   }
+    58%  { transform: translate(-8%, 2%)   rotate(-2deg) scale(1.22); opacity: 1;   }
+    78%  { transform: translate(-45%, -3%) rotate(-4deg) scale(1.28); opacity: 0.5; }
+    100% { transform: translate(-95%, -1%) rotate(-6deg) scale(1.36); opacity: 0;   }
+}
+
+@keyframes fog-drift-right-front {
+    0%   { transform: translate(100%, 5%)  rotate(-2deg) scale(1.05); opacity: 0;    }
+    25%  { transform: translate(42%, 1%)   rotate(0deg)  scale(1.13); opacity: 0.75; }
+    50%  { transform: translate(2%, 4%)    rotate(2deg)  scale(1.18); opacity: 1;    }
+    72%  { transform: translate(-40%, -1%) rotate(4deg)  scale(1.24); opacity: 0.55; }
+    100% { transform: translate(-100%, 3%) rotate(6deg)  scale(1.30); opacity: 0;    }
+}
+
+/* CHURN keyframes — each gradient blob scrolls independently inside its layer at slightly
+   different rates so the puffs appear to billow and morph during the drift. */
+@keyframes fog-churn-a {
+    0%   { background-position: 0%   30%, 80% 60%, 30% 100%; }
+    100% { background-position: 50%  20%, 30% 80%, 80%  60%; }
+}
+@keyframes fog-churn-b {
+    0%   { background-position: 100% 60%, 20% 30%, 70%  90%; }
+    100% { background-position: 60%  40%, 70% 70%, 20%  60%; }
+}
+@keyframes fog-churn-c {
+    0%   { background-position: 100% 30%, 20% 60%, 70% 100%; }
+    100% { background-position: 50%  60%, 70% 20%, 20%  60%; }
+}
+@keyframes fog-churn-d {
+    0%   { background-position: 0%   60%, 80% 30%, 30%  90%; }
+    100% { background-position: 40%  20%, 30% 80%, 80%  60%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #fog-overlay.active,
+    #fog-overlay.active .fog-layer { animation: none; }
 }
 
 /* Light-mode page theming (additive — applies in addition to default styling) */
@@ -289,6 +429,21 @@ body.light-mode .experience {
     background-color: rgba(0, 0, 0, 0.04);
     border-left-color: rgba(0, 0, 0, 0.1);
 }
+body.light-mode .project:hover,
+body.light-mode .experience:hover {
+    background-color: #ebe1c4;
+    border-left-color: #b8932e;
+    box-shadow: 0 0 24px rgba(201, 168, 76, 0.28), 0 0 6px rgba(201, 168, 76, 0.18);
+}
+body.light-mode .project:hover h3,
+body.light-mode .experience:hover h3 {
+    color: #2c1f0e;
+}
+body.light-mode .project:hover .tech,
+body.light-mode .experience:hover .tech {
+    border-color: #a88a30;
+    color: #4a3a1a;
+}
 body.light-mode .tech,
 body.light-mode .links a {
     border-color: rgba(0, 0, 0, 0.12);
@@ -359,32 +514,6 @@ nav {
 }
 
 .nav-links a:hover {
-    color: #2c2416;
-}
-
-/* Temporary beam debug controls (light mode only) */
-.beam-debug-controls {
-    display: none;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-body.light-mode .beam-debug-controls {
-    display: inline-flex;
-}
-
-.beam-debug-controls button {
-    border: 1px solid rgba(200, 184, 136, 0.45);
-    background: rgba(240, 235, 224, 0.72);
-    color: #5e5244;
-    padding: 0.24rem 0.45rem;
-    border-radius: 6px;
-    font-size: 0.7rem;
-    cursor: pointer;
-}
-
-.beam-debug-controls button:hover {
-    border-color: rgba(200, 184, 136, 0.75);
     color: #2c2416;
 }
 

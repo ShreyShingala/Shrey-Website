@@ -1349,7 +1349,6 @@ themeToggle?.addEventListener('click', () => {
         return;
     }
     const canvas = document.getElementById('lightModeCanvas');
-    const fogOverlay = document.getElementById('fogOverlay');
     if (!canvas) return;
 
     // ----- State -----
@@ -1420,7 +1419,7 @@ themeToggle?.addEventListener('click', () => {
         // Static red glow centered on Barad-dûr — bleeds into surrounding fog/mountains
         // even when the beam points elsewhere, so the tower itself reads as the source of evil.
         uTowerOrigin: { value: new THREE.Vector3() },
-        uTowerRadius: { value: 22.0 },
+        uTowerRadius: { value: 32.0 },
         uTowerStrength: { value: 0.0 },
     };
 
@@ -1510,8 +1509,9 @@ themeToggle?.addEventListener('click', () => {
 
                     if (uTowerStrength > 0.0001) {
                         float towerDist = length(vHeightFogWorldPos - uTowerOrigin);
-                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.15, uTowerRadius, towerDist);
-                        float towerMix = towerMask * uTowerStrength * (0.45 + 0.55 * fogAmount);
+                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.12, uTowerRadius, towerDist);
+                        float hotCore = 1.0 - smoothstep(0.0, uTowerRadius * 0.28, towerDist);
+                        float towerMix = (towerMask + hotCore * 0.32) * uTowerStrength * (0.45 + 0.55 * fogAmount);
                         gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(towerMix, 0.0, 1.0));
                     }
                     #endif`
@@ -1519,7 +1519,7 @@ themeToggle?.addEventListener('click', () => {
         };
         material.customProgramCacheKey = () => {
             return [
-                'height-fog-v3-beamtint-tower',
+                'height-fog-v5-beamtint-tower-hotcore',
                 cfg.minY,
                 cfg.maxY,
                 cfg.depthDensity,
@@ -1595,13 +1595,17 @@ themeToggle?.addEventListener('click', () => {
                     }
                     if (uTowerStrength > 0.0001) {
                         float towerDist = length(vSpriteWorldPos - uTowerOrigin);
-                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.15, uTowerRadius, towerDist);
-                        float towerMix = towerMask * uTowerStrength;
+                        float towerMask = 1.0 - smoothstep(uTowerRadius * 0.12, uTowerRadius, towerDist);
+                        // Inner hot core: extra red right at the tower so the
+                        // base reads as the source of evil, brighter than the
+                        // spreading ambient bleed.
+                        float hotCore = 1.0 - smoothstep(0.0, uTowerRadius * 0.28, towerDist);
+                        float towerMix = (towerMask + hotCore * 0.32) * uTowerStrength;
                         gl_FragColor.rgb = mix(gl_FragColor.rgb, uBeamTintColor, clamp(towerMix, 0.0, 1.0));
                     }`
                 );
         };
-        material.customProgramCacheKey = () => 'sprite-beamtint-v1';
+        material.customProgramCacheKey = () => 'sprite-beamtint-v3';
         material.needsUpdate = true;
         spriteTintMaterials.push(material);
     }
@@ -1879,9 +1883,7 @@ themeToggle?.addEventListener('click', () => {
                     const rightBoost = Math.exp(-Math.pow(lx - 45, 2) / 22.0) * 1.8;
                     pos.setY(i, ly + h + rightBoost);
                 }
-                if (layerIdx === 5) { // Update index for mid-range
-                    topYs.push({ x: lx, y: spec.y + ly + h });
-                }
+                topYs.push({ x: lx, y: spec.y + pos.getY(i) });
             }
         }
         geo.computeVertexNormals();
@@ -1894,6 +1896,7 @@ themeToggle?.addEventListener('click', () => {
         heightFogMaterials.push(mat);
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(0, spec.y, spec.z);
+        mesh.userData.topProfile = topYs.sort((a, b) => a.x - b.x);
         scene.add(mesh);
 
         if (layerIdx === 5) { // Update index for mid-range
@@ -1901,6 +1904,150 @@ themeToggle?.addEventListener('click', () => {
         }
         return mesh;
     });
+
+    function sampleMountainTopY(layerIdx, worldX) {
+        const profile = mountainMeshes[layerIdx]?.userData?.topProfile;
+        if (!profile || profile.length < 2) return 0;
+        if (worldX <= profile[0].x) return profile[0].y;
+        if (worldX >= profile[profile.length - 1].x) return profile[profile.length - 1].y;
+        for (let i = 0; i < profile.length - 1; i++) {
+            const a = profile[i];
+            const b = profile[i + 1];
+            if (worldX >= a.x && worldX <= b.x) {
+                const t = (worldX - a.x) / (b.x - a.x);
+                return a.y + (b.y - a.y) * t;
+            }
+        }
+        return profile[0].y;
+    }
+
+    function findMountainPeakNear(layerIdx, centerX, halfWidth = 6.0) {
+        const profile = mountainMeshes[layerIdx]?.userData?.topProfile;
+        if (!profile || profile.length === 0) {
+            return { x: centerX, y: sampleMountainTopY(layerIdx, centerX) };
+        }
+        let best = { x: centerX, y: sampleMountainTopY(layerIdx, centerX) };
+        for (const p of profile) {
+            if (Math.abs(p.x - centerX) <= halfWidth && p.y > best.y) {
+                best = p;
+            }
+        }
+        return best;
+    }
+
+    function makeLavaGlowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256;
+        c.height = 256;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(128, 128, 6, 128, 128, 124);
+        grad.addColorStop(0.0, 'rgba(170, 42, 32, 0.95)');
+        grad.addColorStop(0.28, 'rgba(130, 24, 22, 0.75)');
+        grad.addColorStop(0.58, 'rgba(92, 14, 16, 0.30)');
+        grad.addColorStop(1.0, 'rgba(40, 0, 0, 0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 256, 256);
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Mount Doom ember only (no added cone), anchored to the existing back mountain
+    // ridge at the camera-tuned x/z location.
+    const mountDoomAnchor = { x: -32.778, z: -70.887, layerIdx: 1 };
+    const mountDoomPeak = findMountainPeakNear(mountDoomAnchor.layerIdx, mountDoomAnchor.x, 6.5);
+    const mountDoomZ = (layerSpecs[mountDoomAnchor.layerIdx]?.z ?? mountDoomAnchor.z) + 0.06;
+    const mountDoomGroup = new THREE.Group();
+    mountDoomGroup.position.set(mountDoomPeak.x, mountDoomPeak.y - 0.14, mountDoomZ);
+
+    const craterRim = new THREE.Mesh(
+        new THREE.RingGeometry(0.15, 0.31, 28, 1, Math.PI * 1.05, Math.PI * 0.9),
+        new THREE.MeshBasicMaterial({ color: 0x611312, transparent: true, opacity: 0.86, fog: false, side: THREE.DoubleSide })
+    );
+    craterRim.position.y = 0.115;
+    craterRim.scale.set(1.0, 0.88, 1.0);
+    mountDoomGroup.add(craterRim);
+
+    const craterPit = new THREE.Mesh(
+        new THREE.CircleGeometry(0.15, 24),
+        new THREE.MeshBasicMaterial({ color: 0x120404, transparent: true, opacity: 0.94, fog: false, side: THREE.DoubleSide })
+    );
+    craterPit.position.y = 0.112;
+    craterPit.scale.set(1.0, 0.86, 1.0);
+    mountDoomGroup.add(craterPit);
+
+    const magmaPool = new THREE.Mesh(
+        new THREE.CircleGeometry(0.082, 20),
+        new THREE.MeshBasicMaterial({ color: 0x8b1a18, transparent: true, opacity: 0.88, fog: false, side: THREE.DoubleSide })
+    );
+    magmaPool.position.y = 0.117;
+    magmaPool.scale.set(1.0, 0.80, 1.0);
+    mountDoomGroup.add(magmaPool);
+
+    const lavaGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeLavaGlowTexture(),
+        transparent: true,
+        opacity: 0.36,
+        depthWrite: false,
+        fog: false,
+        blending: THREE.AdditiveBlending,
+    }));
+    lavaGlow.position.y = 0.122;
+    lavaGlow.scale.set(2.05, 1.46, 1);
+    mountDoomGroup.add(lavaGlow);
+
+    const lavaLight = new THREE.PointLight(0x7e1614, 0.30, 5.2);
+    lavaLight.position.y = 0.13;
+    mountDoomGroup.add(lavaLight);
+
+    function makeVolcanoSmokeTexture() {
+        const c = document.createElement('canvas');
+        c.width = 128;
+        c.height = 128;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(64, 64, 6, 64, 64, 58);
+        grad.addColorStop(0.0, 'rgba(160, 168, 182, 0.50)');
+        grad.addColorStop(0.4, 'rgba(128, 136, 150, 0.28)');
+        grad.addColorStop(1.0, 'rgba(80, 86, 98, 0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 128, 128);
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    const volcanoSmokeSprites = [];
+    const volcanoSmokeTexture = makeVolcanoSmokeTexture();
+    for (let i = 0; i < 14; i++) {
+        const isBigPuff = i < 4;
+        const smokeMat = new THREE.SpriteMaterial({
+            map: volcanoSmokeTexture,
+            transparent: true,
+            opacity: isBigPuff ? 0.36 : 0.30,
+            depthWrite: false,
+            fog: false,
+            blending: THREE.NormalBlending,
+        });
+        const smoke = new THREE.Sprite(smokeMat);
+        smoke.position.set(0, 0.16 + i * 0.028, -0.01 - i * 0.002);
+        const baseScale = isBigPuff ? 0.58 + Math.random() * 0.24 : 0.42 + Math.random() * 0.24;
+        smoke.scale.set(baseScale, baseScale * 0.85, 1);
+        smoke.userData = {
+            phase: Math.random() * Math.PI * 2,
+            cycleOffset: Math.random(),
+            driftAmp: isBigPuff ? 0.16 + Math.random() * 0.14 : 0.07 + Math.random() * 0.10,
+            riseRange: isBigPuff ? 2.8 + Math.random() * 1.1 : 1.8 + Math.random() * 0.8,
+            baseY: isBigPuff ? 0.08 + Math.random() * 0.06 : 0.10 + Math.random() * 0.06,
+            baseScale,
+            scaleGrow: isBigPuff ? 0.85 + Math.random() * 0.5 : 0.36 + Math.random() * 0.48,
+            alpha: isBigPuff ? 0.24 + Math.random() * 0.14 : 0.18 + Math.random() * 0.14,
+            speed: isBigPuff ? 0.040 + Math.random() * 0.020 : 0.078 + Math.random() * 0.070,
+            puff: isBigPuff,
+        };
+        mountDoomGroup.add(smoke);
+        volcanoSmokeSprites.push(smoke);
+    }
+    scene.add(mountDoomGroup);
 
     // ----- Grassy plain — huge plane at a lower Y so the cliff has room to read tall -----
     // Lowered from Y=-2.4 to Y=-3.5: the cliff face now has ~2.4 units of vertical drop
@@ -2516,6 +2663,82 @@ themeToggle?.addEventListener('click', () => {
     baraddur.scale.set(baraddurScale * 0.85, baraddurScale * 1.5, baraddurScale * 0.85);
     scene.add(baraddur);
 
+    // ----- Localized Barad-dûr fog — red-tinted swirling mist clinging to
+    // the tower itself. Sits in front of the tower as a circular bank that
+    // slowly rotates (visible swirl) and breathes in opacity, separate from
+    // the global rolling fog so the tower reads as its own weather system.
+    function makeTowerFogTexture() {
+        const S = 512;
+        const c = document.createElement('canvas');
+        c.width = S; c.height = S;
+        const g = c.getContext('2d');
+
+        const rng = (i) => {
+            const x = Math.sin(i * 12.9898 + 137.51) * 43758.5453;
+            return x - Math.floor(x);
+        };
+
+        const drawBlob = (cx, cy, rx, ry, alpha) => {
+            const grad = g.createRadialGradient(cx, cy, 4, cx, cy, Math.max(rx, ry));
+            grad.addColorStop(0,    `rgba(170, 36, 16, ${alpha})`);
+            grad.addColorStop(0.45, `rgba(120, 28, 12, ${alpha * 0.6})`);
+            grad.addColorStop(1,    'rgba(80, 20, 10, 0)');
+            g.fillStyle = grad;
+            g.beginPath();
+            g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            g.fill();
+        };
+
+        // Ring of overlapping blobs around the center — concentrated mass.
+        for (let i = 0; i < 70; i++) {
+            const ang = rng(i) * Math.PI * 2;
+            const r = (0.05 + rng(i + 100) * 0.42) * S;
+            const cx = S / 2 + Math.cos(ang) * r;
+            const cy = S / 2 + Math.sin(ang) * r;
+            const rx = 28 + rng(i + 200) * 80;
+            const ry = 22 + rng(i + 300) * 56;
+            const alpha = 0.40 + rng(i + 400) * 0.45;
+            drawBlob(cx, cy, rx, ry, alpha);
+        }
+
+        // Circular alpha mask — densest at center, fades to 0 at edge so the
+        // fog reads as a localized bank tied to the tower, not a rectangle.
+        g.globalCompositeOperation = 'destination-in';
+        const mask = g.createRadialGradient(S / 2, S / 2, S * 0.04, S / 2, S / 2, S * 0.5);
+        mask.addColorStop(0.00, 'rgba(0,0,0,1.0)');
+        mask.addColorStop(0.45, 'rgba(0,0,0,0.78)');
+        mask.addColorStop(0.78, 'rgba(0,0,0,0.30)');
+        mask.addColorStop(1.00, 'rgba(0,0,0,0)');
+        g.fillStyle = mask;
+        g.fillRect(0, 0, S, S);
+        g.globalCompositeOperation = 'source-over';
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
+    // Two stacked layers rotating opposite directions so the swirl reads as
+    // turbulent rather than a solid wheel. Centered on the tower base; sits
+    // a touch in front in z so it composites cleanly over the silhouette.
+    const towerFogLayers = [
+        { size: 13, opacityBase: 0.36, rotSpeed:  0.06, breathPhase: 0.0, zOffset: 1.2 },
+        { size: 16, opacityBase: 0.26, rotSpeed: -0.04, breathPhase: 1.7, zOffset: 0.6 },
+    ].map((cfg) => {
+        const mat = new THREE.MeshBasicMaterial({
+            map: makeTowerFogTexture(),
+            transparent: true,
+            opacity: cfg.opacityBase,
+            depthWrite: false,
+            fog: false,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.size, cfg.size * 0.78), mat);
+        mesh.position.set(baraddurPos.x, baraddurPos.y + 1.2, baraddurPos.z + cfg.zOffset);
+        mesh.userData = cfg;
+        scene.add(mesh);
+        return mesh;
+    });
+
     // ----- Eye blink state -----
     const eyeBaseScaleY = eye.scale.y;
     let eyeBlinkOpen = 1.0;
@@ -2787,9 +3010,14 @@ themeToggle?.addEventListener('click', () => {
     let beamManualPaused = false;
     const manualYawStep = 0.04;
     const manualPitchStep = 0.025;
+    const cameraManualStep = 0.2;
     const tmpBeamQuat = new THREE.Quaternion();
     const tmpBeamDir = new THREE.Vector3();
     const tmpBeamTarget = new THREE.Vector3();
+    const tmpCamForward = new THREE.Vector3();
+    const tmpCamRight = new THREE.Vector3();
+    const tmpCamLookTarget = new THREE.Vector3();
+    const cameraLookDistance = defaultCameraPos.distanceTo(defaultCameraTarget);
 
     const beamAzimuthOffset = (targetDir) => {
         const base = new THREE.Vector2(beamDir.x, beamDir.z).normalize();
@@ -2837,6 +3065,65 @@ themeToggle?.addEventListener('click', () => {
                 }
                 : null,
         });
+    }
+
+    function getCameraCoordsPayload(reason = 'manual') {
+        camera.getWorldDirection(tmpCamForward);
+        if (tmpCamForward.lengthSq() < 1e-8) tmpCamForward.set(0, 0, -1);
+        tmpCamLookTarget.copy(camera.position).addScaledVector(tmpCamForward.normalize(), cameraLookDistance);
+        return {
+            reason,
+            position: {
+                x: Number(camera.position.x.toFixed(3)),
+                y: Number(camera.position.y.toFixed(3)),
+                z: Number(camera.position.z.toFixed(3)),
+            },
+            lookAt: {
+                x: Number(tmpCamLookTarget.x.toFixed(3)),
+                y: Number(tmpCamLookTarget.y.toFixed(3)),
+                z: Number(tmpCamLookTarget.z.toFixed(3)),
+            },
+            fov: Number(camera.fov.toFixed(3)),
+        };
+    }
+
+    function cameraCoordsToPasteText(payload) {
+        return [
+            `camera.position.set(${payload.position.x}, ${payload.position.y}, ${payload.position.z});`,
+            `camera.lookAt(${payload.lookAt.x}, ${payload.lookAt.y}, ${payload.lookAt.z});`,
+            `camera.fov = ${payload.fov};`,
+            'camera.updateProjectionMatrix();',
+        ].join('\n');
+    }
+
+    function copyTextToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text).then(() => true, () => false);
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.pointerEvents = 'none';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return Promise.resolve(Boolean(copied));
+    }
+
+    function nudgeCamera(forwardStep = 0, rightStep = 0) {
+        camera.getWorldDirection(tmpCamForward);
+        tmpCamForward.y = 0;
+        if (tmpCamForward.lengthSq() < 1e-8) tmpCamForward.set(0, 0, -1);
+        tmpCamForward.normalize();
+        tmpCamRight.crossVectors(tmpCamForward, camera.up).normalize();
+        camera.position
+            .addScaledVector(tmpCamForward, forwardStep)
+            .addScaledVector(tmpCamRight, rightStep);
     }
 
     function startRandomTargetMove(elapsed) {
@@ -3024,6 +3311,7 @@ themeToggle?.addEventListener('click', () => {
         if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
 
         let beamChanged = false;
+        let cameraChanged = false;
         let shadowChanged = false;
 
         switch (e.code) {
@@ -3044,6 +3332,39 @@ themeToggle?.addEventListener('click', () => {
                 beamYaw += manualYawStep;
                 beamChanged = true;
                 break;
+
+            // Camera Controls (mount doom light scene)
+            case 'KeyI':
+                nudgeCamera(cameraManualStep, 0);
+                cameraChanged = true;
+                break;
+            case 'KeyK':
+                nudgeCamera(-cameraManualStep, 0);
+                cameraChanged = true;
+                break;
+            case 'KeyJ':
+                nudgeCamera(0, -cameraManualStep);
+                cameraChanged = true;
+                break;
+            case 'KeyL':
+                nudgeCamera(0, cameraManualStep);
+                cameraChanged = true;
+                break;
+            case 'KeyC': {
+                e.preventDefault();
+                const payload = getCameraCoordsPayload('manual-keyc');
+                const pasteText = cameraCoordsToPasteText(payload);
+                copyTextToClipboard(pasteText).then((copied) => {
+                    console.log(
+                        copied
+                            ? '[beam-debug] copied camera coords to clipboard'
+                            : '[beam-debug] clipboard copy unavailable, camera coords below'
+                    );
+                    console.log('[beam-debug] camera-coords', payload);
+                    console.log(pasteText);
+                });
+                return;
+            }
 
             // Shadow Controls
             case 'ArrowUp':
@@ -3090,6 +3411,11 @@ themeToggle?.addEventListener('click', () => {
             e.preventDefault();
             beamYaw = normalizeAngle(beamYaw);
             logBeamCoords(`manual-${e.code.toLowerCase()}`);
+        }
+
+        if (cameraChanged) {
+            e.preventDefault();
+            console.log('[beam-debug] camera-coords', getCameraCoordsPayload(`manual-${e.code.toLowerCase()}`));
         }
         
         if (shadowChanged) {
@@ -3460,6 +3786,23 @@ themeToggle?.addEventListener('click', () => {
             fog.position.y = cfg.y + Math.sin(elapsed * 0.09 + cfg.phase) * 0.05;
         }
 
+        // Mount Doom smoke plume — subtle looping drift so the summit feels alive.
+        for (const smoke of volcanoSmokeSprites) {
+            const cfg = smoke.userData;
+            const cycle = (elapsed * cfg.speed + cfg.cycleOffset) % 1;
+            const fade = 1 - cycle;
+            const spread = cfg.driftAmp * (0.55 + cycle * (cfg.puff ? 1.45 : 1.05));
+            smoke.position.x = Math.sin(elapsed * (cfg.puff ? 0.46 : 0.62) + cfg.phase) * spread;
+            smoke.position.y = cfg.baseY + cycle * cfg.riseRange;
+            smoke.position.z = -0.01 - cycle * (cfg.puff ? 0.09 : 0.055);
+            const scale = cfg.baseScale + cycle * cfg.scaleGrow;
+            smoke.scale.set(scale, scale * (cfg.puff ? 0.76 : 0.82), 1);
+            const pulse = cfg.puff
+                ? (0.98 + Math.sin(elapsed * 1.1 + cfg.phase) * 0.26)
+                : (0.94 + Math.sin(elapsed * 1.8 + cfg.phase) * 0.20);
+            smoke.material.opacity = Math.max(0, cfg.alpha * fade * pulse);
+        }
+
         // Eye blink timing: clustered/jittery cadence (dark-mode-like),
         // with occasional doubles/triples.
         if (!eyeIsBlinking && elapsed >= nextEyeBlinkAt) {
@@ -3604,7 +3947,7 @@ themeToggle?.addEventListener('click', () => {
         beamTintUniforms.uBeamTintStrength.value = 0;
         beamTintUniforms.uTowerOrigin.value.copy(eyeWorldPos);
         const towerBreath = 0.85 + 0.15 * Math.sin(elapsed * 0.45);
-        beamTintUniforms.uTowerStrength.value = 0.32 * towerBreath;
+        beamTintUniforms.uTowerStrength.value = 0.34 * towerBreath;
 
         // Single shared material drives all blades.
         beamMaterial.opacity = currentOpacity;
@@ -3654,13 +3997,22 @@ themeToggle?.addEventListener('click', () => {
         updateBreeze(elapsed, deltaTime);
         updateSmoke(deltaTime, elapsed);
 
+        // Localized Barad-dûr fog: each layer rotates at its own rate (one CW,
+        // one CCW) and breathes in opacity so the bank churns rather than
+        // looking like a solid wheel. Position holds; only rotation + alpha animate.
+        for (const fog of towerFogLayers) {
+            const cfg = fog.userData;
+            fog.rotation.z = elapsed * cfg.rotSpeed;
+            fog.material.opacity = cfg.opacityBase + Math.sin(elapsed * 0.4 + cfg.breathPhase) * 0.10;
+        }
+
         renderer.render(scene, camera);
     }
     renderLight();
 
     // ----- Expose hooks for toggle handler -----
     window._lightScene = {
-        canvas, camera, fogOverlay,
+        canvas, camera,
         defaultCameraPos, defaultCameraTarget,
         baraddurPos,
         DEFAULT_FOV, ZOOM_FOV,
@@ -3685,88 +4037,77 @@ themeToggle?.addEventListener('click', () => {
 })();
 
 // ============================================================================
-// LIGHT↔DARK TOGGLE EXTENSION — capture-phase listener on the ring button.
+// LIGHT↔DARK TOGGLE — rolling fog wipe.
+// Three layered fog clouds on #fog-overlay drift in from different directions,
+// hold thickly opaque at midpoint (where the theme classes swap underneath),
+// then drift out the opposite way. Masks both the ~100vh hero layout shift
+// and the canvas swap.
 // ============================================================================
-(function attachLightToggle() {
+(function attachFogToggle() {
     const toggle = document.getElementById('theme-toggle');
-    if (!toggle) return;
+    const fog = document.getElementById('fog-overlay');
+    if (!toggle || !fog) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const TOTAL_MS  = 2200; // matches CSS animation duration
+    const SWAP_MS   = 1100; // 50% — peak fog density
 
     toggle.addEventListener('click', (e) => {
         const ls = window._lightScene;
-        if (!ls || typeof gsap === 'undefined') return;
+        if (!ls) return; // fall through to no-Three.js fallback handler
+        if (ls.isTransitioning) { e.stopImmediatePropagation(); return; }
 
-        if (ls.isTransitioning) {
-            e.stopImmediatePropagation();
-            return;
-        }
-
-        // Add flip animation
-        const ringIcon = toggle.querySelector('.ring-icon');
-        if (ringIcon) {
-            toggle.classList.remove('flipping');
-            void toggle.offsetWidth; // Trigger reflow
-            toggle.classList.add('flipping');
-            setTimeout(() => toggle.classList.remove('flipping'), 600);
-        }
+        // Ring flip
+        toggle.classList.remove('flipping');
+        void toggle.offsetWidth;
+        toggle.classList.add('flipping');
+        setTimeout(() => toggle.classList.remove('flipping'), 600);
 
         const wasDark = document.body.classList.contains('dark');
         ls.isTransitioning = true;
 
-        const fogEl = ls.fogOverlay;
-        const cam = ls.camera;
-
-        if (!wasDark) {
-            // LIGHT → DARK
-            gsap.to(cam.position, {
-                x: ls.baraddurPos.x, y: ls.baraddurPos.y + 0.5, z: ls.baraddurPos.z + 1.5,
-                duration: 1.8, ease: 'power2.in',
-                onUpdate: () => cam.lookAt(ls.baraddurPos.x, ls.baraddurPos.y, ls.baraddurPos.z),
-            });
-            gsap.to(cam, {
-                fov: ls.ZOOM_FOV, duration: 1.8, ease: 'power2.in',
-                onUpdate: () => cam.updateProjectionMatrix(),
-            });
-            gsap.to(fogEl, { opacity: 1, duration: 0.9, ease: 'power2.in', delay: 1.0 });
-            gsap.delayedCall(1.8, () => {
-                document.body.classList.remove('light-mode');
-                document.body.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-                ls.canvas.style.display = 'none';
-                const sc = document.getElementById('sauron-canvas');
-                if (sc) sc.style.opacity = '1';
-                if (window._sauronForceEyeOpen) window._sauronForceEyeOpen(800);
-            });
-            gsap.to(fogEl, {
-                opacity: 0, duration: 0.7, ease: 'power1.out', delay: 1.8,
-                onComplete: () => { ls.isTransitioning = false; ls.isLightMode = false; ls.snapToDefault(); },
-            });
-            e.stopImmediatePropagation();
-        } else {
-            // DARK → LIGHT
-            gsap.to(fogEl, { opacity: 1, duration: 0.6, ease: 'power2.in' });
-            gsap.delayedCall(0.6, () => {
+        const swap = () => {
+            const sc = document.getElementById('sauron-canvas');
+            if (wasDark) {
                 document.body.classList.remove('dark');
                 document.body.classList.add('light-mode');
                 localStorage.setItem('theme', 'light');
                 ls.canvas.style.display = 'block';
-                const sc = document.getElementById('sauron-canvas');
                 if (sc) sc.style.opacity = '0';
-                ls.snapToBaraddur();
-            });
-            gsap.to(fogEl, {
-                opacity: 0, duration: 1.4, ease: 'power1.out', delay: 0.6,
-                onComplete: () => { ls.isTransitioning = false; ls.isLightMode = true; },
-            });
-            gsap.to(cam.position, {
-                x: ls.defaultCameraPos.x, y: ls.defaultCameraPos.y, z: ls.defaultCameraPos.z,
-                duration: 1.8, ease: 'power2.out', delay: 0.6,
-                onUpdate: () => cam.lookAt(ls.defaultCameraTarget.x, ls.defaultCameraTarget.y, ls.defaultCameraTarget.z),
-            });
-            gsap.to(cam, {
-                fov: ls.computeResponsiveFov(), duration: 1.8, ease: 'power2.out', delay: 0.6,
-                onUpdate: () => cam.updateProjectionMatrix(),
-            });
+                ls.snapToDefault();
+                ls.isLightMode = true;
+            } else {
+                document.body.classList.remove('light-mode');
+                document.body.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+                ls.canvas.style.display = 'none';
+                if (sc) sc.style.opacity = '1';
+                if (window._sauronForceEyeOpen) window._sauronForceEyeOpen(0);
+                ls.isLightMode = false;
+            }
+        };
+
+        if (reduced) {
+            swap();
+            ls.isTransitioning = false;
             e.stopImmediatePropagation();
+            return;
         }
+
+        // Restart animation cleanly even if user toggles repeatedly
+        fog.classList.remove('active');
+        void fog.offsetWidth; // force reflow so re-adding restarts keyframes
+        fog.classList.add('active');
+
+        // Swap themes at peak fog density (under fully-opaque cover)
+        setTimeout(swap, SWAP_MS);
+
+        // Clean up after animation completes
+        setTimeout(() => {
+            fog.classList.remove('active');
+            ls.isTransitioning = false;
+        }, TOTAL_MS + 50);
+
+        e.stopImmediatePropagation();
     }, { capture: true });
 })();
