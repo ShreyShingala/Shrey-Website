@@ -4049,8 +4049,8 @@ themeToggle?.addEventListener('click', () => {
     if (!toggle || !fog) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const TOTAL_MS  = 2200; // matches CSS animation duration
-    const SWAP_MS   = 1100; // 50% — peak fog density
+    const TOTAL_MS  = 1100; // matches CSS animation duration
+    const SWAP_MS   =  550; // 50% — peak fog density
 
     toggle.addEventListener('click', (e) => {
         const ls = window._lightScene;
