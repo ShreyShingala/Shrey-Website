@@ -2151,6 +2151,17 @@ themeToggle?.addEventListener('click', () => {
     mistPlane.position.set(0, -3.15, -36); // Constrained to mountain depth only
     applyBeamTintToSpriteMaterial(mistMat);
     scene.add(mistPlane);
+    const mistSidePlanes = [-220, 220].map((xOffset) => {
+        const mat = mistMat.clone();
+        mat.map = makeValleyMistTexture();
+        const mesh = new THREE.Mesh(mistGeo, mat);
+        mesh.rotation.copy(mistPlane.rotation);
+        mesh.position.set(xOffset, -3.15, -36);
+        mesh.userData = { baseX: xOffset };
+        applyBeamTintToSpriteMaterial(mat);
+        scene.add(mesh);
+        return mesh;
+    });
 
     // ----- Low foothill haze — softens the grass-to-mountain meeting line -----
     function makeGroundBlendTexture() {
@@ -2369,22 +2380,36 @@ themeToggle?.addEventListener('click', () => {
         { y: -3.45, z: -20.5, w: 100, h: 1.8, repeats: 4.6, opacity: 0.45, scrollSpeed: 0.0150, pulsePeriod: 5.6, pulseAmp: 0.14, phase: 2.7, seed: 103 },
     ];
 
-    const rollingFogLayers = rollingFogSpecs.map((cfg) => {
+    const rollingFogLayers = [];
+    rollingFogSpecs.forEach((cfg) => {
         const tex = makeRollingFogTexture(cfg.seed);
         tex.repeat.set(cfg.repeats, 1);
-        const mat = new THREE.MeshBasicMaterial({
-            map: tex,
-            transparent: true,
-            opacity: cfg.opacity,
-            depthWrite: false,
-            fog: false,
-        });
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.w, cfg.h), mat);
-        mesh.position.set(cfg.x ?? 0, cfg.y, cfg.z);
-        mesh.userData = cfg;
-        applyBeamTintToSpriteMaterial(mat);
-        scene.add(mesh);
-        return mesh;
+        const makeFogMesh = (xOffset = 0, textureOffsetBase = 0, map = tex) => {
+            const mat = new THREE.MeshBasicMaterial({
+                map,
+                transparent: true,
+                opacity: cfg.opacity,
+                depthWrite: false,
+                fog: false,
+            });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(cfg.w, cfg.h), mat);
+            mesh.position.set((cfg.x ?? 0) + xOffset, cfg.y, cfg.z);
+            mesh.userData = { ...cfg, textureOffsetBase };
+            applyBeamTintToSpriteMaterial(mat);
+            scene.add(mesh);
+            rollingFogLayers.push(mesh);
+            return mesh;
+        };
+        makeFogMesh();
+
+        for (const dir of [-1, 1]) {
+            const sideTex = tex.clone();
+            sideTex.needsUpdate = true;
+            sideTex.repeat.copy(tex.repeat);
+            sideTex.wrapS = THREE.RepeatWrapping;
+            sideTex.wrapT = THREE.ClampToEdgeWrapping;
+            makeFogMesh(dir * cfg.w, dir * cfg.repeats, sideTex);
+        }
     });
 
     // ----- Snowy mountain top we're standing on — plateau extends across left + bottom -----
@@ -3808,7 +3833,11 @@ themeToggle?.addEventListener('click', () => {
         groundBlendBack.material.map.offset.x = elapsed * groundBlendBack.userData.scrollSpeed;
         groundBlendBack.position.y = -2.80 + Math.sin(elapsed * 0.19 + 0.8) * 0.05;
         groundBlendBack.material.opacity = 0.42 + Math.sin(elapsed * 0.28 + 1.2) * 0.09;
-        mistPlane.position.x = Math.sin(elapsed * 0.06 + 0.4) * 1.6;
+        const mistDriftX = Math.sin(elapsed * 0.06 + 0.4) * 1.6;
+        mistPlane.position.x = mistDriftX;
+        for (const sideMist of mistSidePlanes) {
+            sideMist.position.x = sideMist.userData.baseX + mistDriftX;
+        }
         for (const wisp of mountainWisps) {
             const cfg = wisp.userData;
             wisp.material.map.offset.x = elapsed * cfg.scrollSpeed;
@@ -3823,7 +3852,7 @@ themeToggle?.addEventListener('click', () => {
             const cfg = fog.userData;
             // Positive offset.x advances the UV sample window rightward through the
             // texture, which makes the fog content appear to drift LEFT on screen.
-            fog.material.map.offset.x = elapsed * cfg.scrollSpeed;
+            fog.material.map.offset.x = (cfg.textureOffsetBase ?? 0) + elapsed * cfg.scrollSpeed;
             const pulse = Math.sin((elapsed * Math.PI * 2) / cfg.pulsePeriod + cfg.phase);
             fog.material.opacity = Math.max(0, cfg.opacity + pulse * cfg.pulseAmp);
             fog.position.y = cfg.y + Math.sin(elapsed * 0.09 + cfg.phase) * 0.05;
