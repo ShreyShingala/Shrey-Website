@@ -7,6 +7,8 @@
 html {
     scroll-behavior: smooth;
     overscroll-behavior: none;
+    min-height: 100%;
+    background-color: #f5f0e8;
 }
 
 /* ============================================
@@ -20,9 +22,13 @@ body {
     color: #2c2416;
     line-height: 1.6;
     position: relative;
+    min-height: 100vh;
+    min-height: 100dvh;
     overscroll-behavior: none;
-    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                color 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* 350ms: theme fades start at the fog's 50% swap and MUST finish before
+       the fog thins (~85%), or the page is still color-shifting in view */
+    transition: background-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                color 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Texture overlays — cross-fade because background-image can't transition */
@@ -33,7 +39,7 @@ body::after {
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    transition: opacity 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: opacity 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Shire texture (warm parchment grain) */
@@ -70,10 +76,14 @@ body.dark::after {
     left: 0;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     z-index: 150;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 800ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Was 800ms — that fade outlived the fog cover by ~300ms, leaving a
+       translucent eye ghosting over the light theme after every toggle
+       (and visibly reversing mid-fade when toggling rapidly). */
+    transition: opacity 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 body.dark #sauron-canvas {
@@ -111,6 +121,26 @@ body.light-mode .hero > .divider {
     z-index: 3;
 }
 
+/* Chrome can occasionally leave a thin unpainted strip at the bottom of a
+   newly-opened fullscreen window until the first forced relayout. Keep a
+   temporary top-of-hero paint guard there; JS drops it as soon as the user
+   scrolls away from the first viewport. */
+body.light-mode.viewport-paint-guard #main-content::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 40px;
+    z-index: 4;
+    pointer-events: none;
+    background: linear-gradient(to bottom,
+        rgba(240, 235, 224, 0),
+        rgba(240, 235, 224, 0.96) 46%,
+        #f0ebe0 100%);
+    transform: translateZ(0);
+}
+
 /* Rolling fog overlay used by the light↔dark toggle transition. Four
    layered grey fog masses sweep in from the left and right edges with
    internal background-position churn (cloud puffs scrolling within each
@@ -127,15 +157,30 @@ body.light-mode .hero > .divider {
     will-change: background-color;
 }
 
+/* fog-swap-tick is a zero-visual-cost timer animation: JS listens for its
+   animationend to perform the theme swap. Because it runs on the SAME
+   animation clock as fog-bg, the swap can never fire before the backdrop is
+   opaque — even if the browser stalls starting the animations (the old
+   setTimeout approach drifted against the animation clock and let the swap
+   show through thin fog). */
 #fog-overlay.active {
-    animation: fog-bg 1100ms cubic-bezier(0.42, 0, 0.58, 1) forwards;
+    animation: fog-bg 1000ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
+               fog-swap-tick 500ms linear forwards;
 }
 
+@keyframes fog-swap-tick {
+    from { outline-color: rgba(0, 0, 0, 0); }
+    to   { outline-color: rgba(0, 0, 0, 0.01); }
+}
+
+/* The backdrop MUST reach full opacity around the midpoint — the theme swap
+   (page colors + both canvases flipping in one frame) happens at 50% and has
+   to be completely hidden. Anything less than 1.0 shows a visible pop. */
 @keyframes fog-bg {
-    0%   { background-color: rgba(170, 174, 180, 0);   }
-    42%  { background-color: rgba(170, 174, 180, 0.92);}
-    58%  { background-color: rgba(170, 174, 180, 0.92);}
-    100% { background-color: rgba(170, 174, 180, 0);   }
+    0%   { background-color: rgba(170, 174, 180, 0); }
+    30%  { background-color: rgba(170, 174, 180, 1); }
+    70%  { background-color: rgba(170, 174, 180, 1); }
+    100% { background-color: rgba(170, 174, 180, 0); }
 }
 
 .fog-layer {
@@ -143,7 +188,7 @@ body.light-mode .hero > .divider {
     inset: -40%; /* extend well beyond viewport so wisps can drift in/out and the displacement filter has room */
     pointer-events: none;
     opacity: 0;
-    will-change: transform, opacity, background-position;
+    will-change: transform, opacity;
     transform-origin: 50% 50%;
     background-repeat: no-repeat;
     /* SVG turbulence filter morphs the gradient blobs into wispy fog edges */
@@ -188,78 +233,71 @@ body.light-mode .hero > .divider {
     filter: url(#fog-turbulence) blur(2.5px);
 }
 
-/* Each layer runs TWO simultaneous animations:
-     drift = overall layer translates across the viewport with subtle scale + tilt
-     churn = background-position scrolls so cloud puffs move WITHIN the layer at a different rate
-   The two together create parallax + internal motion that reads as real rolling fog. */
-#fog-overlay.active .fog-1 { animation: fog-drift-left-back   1100ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
-                                          fog-churn-a 1100ms linear forwards; }
-#fog-overlay.active .fog-2 { animation: fog-drift-left-front  1100ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
-                                          fog-churn-b 1100ms linear forwards; }
-#fog-overlay.active .fog-3 { animation: fog-drift-right-back  1100ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
-                                          fog-churn-c 1100ms linear forwards; }
-#fog-overlay.active .fog-4 { animation: fog-drift-right-front 1100ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
-                                          fog-churn-d 1100ms linear forwards; }
+/* Each layer rolls THROUGH the viewport in one continuous direction:
+   fast ease-out arrival (a fog bank rolling in), a lingering billow at peak
+   (slow drift + swelling scale while the backdrop is opaque), then ease-in
+   acceleration out the far side. Transform + opacity only — GPU-composited,
+   no per-frame repaints. Staggered delays make the banks cross each other,
+   which gives the internal churn the old background-position animation faked. */
+#fog-overlay.active .fog-1 { animation: fog-drift-left-back   1000ms cubic-bezier(0.42, 0, 0.58, 1) forwards; }
+#fog-overlay.active .fog-2 { animation: fog-drift-left-front   950ms cubic-bezier(0.42, 0, 0.58, 1) 50ms forwards; }
+#fog-overlay.active .fog-3 { animation: fog-drift-right-back   975ms cubic-bezier(0.42, 0, 0.58, 1) 25ms forwards; }
+#fog-overlay.active .fog-4 { animation: fog-drift-right-front  925ms cubic-bezier(0.42, 0, 0.58, 1) 75ms forwards; }
 
-/* DRIFT keyframes — slow translate + tiny tilt + gentle scale pulse. Rotation kept small
-   (≤7°) because real fog doesn't pinwheel; the swirling feeling comes from the filter. */
+/* DRIFT keyframes — keyframe spacing does the physics: 40% of the distance is
+   covered in the first 20% of time (rolling in), then the bank crawls and
+   billows through the middle half, then accelerates out. Rotation kept small
+   (≤7°) because real fog doesn't pinwheel; swirling comes from the filter. */
 @keyframes fog-drift-left-back {
-    0%   { transform: translate(-90%, 4%)  rotate(-3deg) scale(1.08); opacity: 0;   }
-    22%  { transform: translate(-40%, 1%)  rotate(-1deg) scale(1.14); opacity: 0.7; }
-    45%  { transform: translate(-5%, 2%)   rotate(1deg)  scale(1.20); opacity: 1;   }
-    58%  { transform: translate(8%, -1%)   rotate(2deg)  scale(1.22); opacity: 1;   }
-    78%  { transform: translate(45%, 3%)   rotate(4deg)  scale(1.28); opacity: 0.5; }
-    100% { transform: translate(95%, 1%)   rotate(6deg)  scale(1.36); opacity: 0;   }
+    0%   { transform: translate(-85%, 6%)  rotate(-3deg) scale(1.10); opacity: 0;    }
+    18%  { transform: translate(-42%, 3%)  rotate(-2deg) scale(1.14); opacity: 0.85; }
+    40%  { transform: translate(-8%, 1%)   rotate(-1deg) scale(1.18); opacity: 1;    }
+    62%  { transform: translate(6%, -2%)   rotate(1deg)  scale(1.25); opacity: 1;    }
+    82%  { transform: translate(42%, -4%)  rotate(3deg)  scale(1.31); opacity: 0.55; }
+    100% { transform: translate(88%, -6%)  rotate(5deg)  scale(1.38); opacity: 0;    }
 }
 
 @keyframes fog-drift-left-front {
-    0%   { transform: translate(-100%, 6%) rotate(2deg)  scale(1.05); opacity: 0;    }
-    25%  { transform: translate(-42%, 3%)  rotate(0deg)  scale(1.13); opacity: 0.75; }
-    50%  { transform: translate(-2%, -3%)  rotate(-2deg) scale(1.18); opacity: 1;    }
-    72%  { transform: translate(40%, 1%)   rotate(-4deg) scale(1.24); opacity: 0.55; }
-    100% { transform: translate(100%, -4%) rotate(-6deg) scale(1.30); opacity: 0;    }
+    0%   { transform: translate(-95%, -4%) rotate(2deg)  scale(1.06); opacity: 0;    }
+    20%  { transform: translate(-44%, -1%) rotate(1deg)  scale(1.12); opacity: 0.9;  }
+    42%  { transform: translate(-4%, 2%)   rotate(-1deg) scale(1.17); opacity: 1;    }
+    60%  { transform: translate(8%, 4%)    rotate(-2deg) scale(1.23); opacity: 1;    }
+    80%  { transform: translate(44%, 6%)   rotate(-4deg) scale(1.29); opacity: 0.5;  }
+    100% { transform: translate(92%, 8%)   rotate(-6deg) scale(1.36); opacity: 0;    }
 }
 
 @keyframes fog-drift-right-back {
-    0%   { transform: translate(90%, -2%)  rotate(3deg)  scale(1.08); opacity: 0;   }
-    22%  { transform: translate(40%, 2%)   rotate(1deg)  scale(1.14); opacity: 0.7; }
-    45%  { transform: translate(5%, -2%)   rotate(-1deg) scale(1.20); opacity: 1;   }
-    58%  { transform: translate(-8%, 2%)   rotate(-2deg) scale(1.22); opacity: 1;   }
-    78%  { transform: translate(-45%, -3%) rotate(-4deg) scale(1.28); opacity: 0.5; }
-    100% { transform: translate(-95%, -1%) rotate(-6deg) scale(1.36); opacity: 0;   }
+    0%   { transform: translate(85%, -5%)  rotate(3deg)  scale(1.10); opacity: 0;    }
+    18%  { transform: translate(42%, -2%)  rotate(2deg)  scale(1.14); opacity: 0.85; }
+    40%  { transform: translate(8%, 0%)    rotate(1deg)  scale(1.18); opacity: 1;    }
+    62%  { transform: translate(-6%, 2%)   rotate(-1deg) scale(1.25); opacity: 1;    }
+    82%  { transform: translate(-42%, 4%)  rotate(-3deg) scale(1.31); opacity: 0.55; }
+    100% { transform: translate(-88%, 6%)  rotate(-5deg) scale(1.38); opacity: 0;    }
 }
 
 @keyframes fog-drift-right-front {
-    0%   { transform: translate(100%, 5%)  rotate(-2deg) scale(1.05); opacity: 0;    }
-    25%  { transform: translate(42%, 1%)   rotate(0deg)  scale(1.13); opacity: 0.75; }
-    50%  { transform: translate(2%, 4%)    rotate(2deg)  scale(1.18); opacity: 1;    }
-    72%  { transform: translate(-40%, -1%) rotate(4deg)  scale(1.24); opacity: 0.55; }
-    100% { transform: translate(-100%, 3%) rotate(6deg)  scale(1.30); opacity: 0;    }
-}
-
-/* CHURN keyframes — each gradient blob scrolls independently inside its layer at slightly
-   different rates so the puffs appear to billow and morph during the drift. */
-@keyframes fog-churn-a {
-    0%   { background-position: 0%   30%, 80% 60%, 30% 100%; }
-    100% { background-position: 50%  20%, 30% 80%, 80%  60%; }
-}
-@keyframes fog-churn-b {
-    0%   { background-position: 100% 60%, 20% 30%, 70%  90%; }
-    100% { background-position: 60%  40%, 70% 70%, 20%  60%; }
-}
-@keyframes fog-churn-c {
-    0%   { background-position: 100% 30%, 20% 60%, 70% 100%; }
-    100% { background-position: 50%  60%, 70% 20%, 20%  60%; }
-}
-@keyframes fog-churn-d {
-    0%   { background-position: 0%   60%, 80% 30%, 30%  90%; }
-    100% { background-position: 40%  20%, 30% 80%, 80%  60%; }
+    0%   { transform: translate(95%, 5%)   rotate(-2deg) scale(1.06); opacity: 0;    }
+    20%  { transform: translate(44%, 2%)   rotate(-1deg) scale(1.12); opacity: 0.9;  }
+    42%  { transform: translate(4%, -1%)   rotate(1deg)  scale(1.17); opacity: 1;    }
+    60%  { transform: translate(-8%, -3%)  rotate(2deg)  scale(1.23); opacity: 1;    }
+    80%  { transform: translate(-44%, -5%) rotate(4deg)  scale(1.29); opacity: 0.5;  }
+    100% { transform: translate(-92%, -7%) rotate(6deg)  scale(1.36); opacity: 0;    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     #fog-overlay.active,
     #fog-overlay.active .fog-layer { animation: none; }
 }
+
+/* Skip painting the fog stack entirely when idle — the layers reference an
+   always-animating SVG turbulence filter, so leaving them composited at
+   opacity 0 still costs filter work every frame. */
+#fog-overlay:not(.active) { display: none; }
+
+/* Safari computes SVG filters (feTurbulence/feDisplacementMap) on the CPU,
+   which freezes the theme transition. Plain blur fog there instead — the
+   background-position churn keyframes still give it movement. */
+body.is-safari .fog-layer { filter: blur(6px); }
 
 /* Light-mode page theming (additive — applies in addition to default styling) */
 body.light-mode {
@@ -294,6 +332,8 @@ body.light-mode .hero {
     padding-top: 8vh;
     padding-bottom: 4vh;
     min-height: 100vh;
+    min-height: 100dvh;
+    min-height: var(--app-viewport-height, 100dvh);
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -306,10 +346,10 @@ body.light-mode .hero {
 body.light-mode .hero::before {
     content: '';
     position: absolute;
-    bottom: 0;
+    bottom: calc(-1 * var(--light-scene-bottom-bleed, 96px));
     left: -50vw;
     right: -50vw;
-    height: 8rem;
+    height: calc(8rem + var(--light-scene-bottom-bleed, 96px));
     pointer-events: none;
     z-index: 1;
     background:
@@ -335,10 +375,10 @@ body.light-mode .hero::before {
 body.light-mode .hero::after {
     content: '';
     position: absolute;
-    bottom: 0;
+    bottom: calc(-1 * var(--light-scene-bottom-bleed, 96px));
     left: -50vw;
     right: -50vw;
-    height: 10rem;
+    height: calc(10rem + var(--light-scene-bottom-bleed, 96px));
     pointer-events: none;
     z-index: 2;
     background: linear-gradient(to bottom,
@@ -763,8 +803,8 @@ h2 {
     background-color: #eae4d6;
     border-left: 2px solid #c4b896;
     margin-bottom: 2px;
-    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transition: background-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -867,8 +907,8 @@ body.dark .exp-desc { color: #8a8278; }
     background-color: #eae4d6;
     border-left: 2px solid #c4b896;
     margin-bottom: 2px;
-    transition: background-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
-                border-color 500ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transition: background-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -1031,6 +1071,14 @@ body.dark #about p {
 body.dark .ember-glow {
     color: #e8b840;
     animation: emberShift 4s ease-in-out infinite;
+}
+
+/* Safari: animating text-shadow repaints the text every frame on the CPU.
+   Hold a static mid-cycle glow instead of the infinite emberShift loop. */
+body.is-safari.dark .ember-glow {
+    animation: none;
+    color: #f0a030;
+    text-shadow: 0 0 8px rgba(240, 160, 48, 0.4), 0 0 24px rgba(255, 100, 0, 0.2);
 }
 
 @keyframes emberShift {

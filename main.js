@@ -5,6 +5,10 @@
 const themeToggle = document.getElementById('theme-toggle');
 const body = document.body;
 
+// Safari renders SVG filters and canvas shadowBlur on the CPU — class is set
+// by the inline boot script in index.html; used to dial back expensive effects.
+const IS_SAFARI = body.classList.contains('is-safari');
+
 // Check for saved theme; default to dark
 const savedTheme = localStorage.getItem('theme');
 
@@ -41,6 +45,11 @@ let transitionSafetyTimer = null;
 let transitionOverlayFadeTimer = null;
 
 themeToggle?.addEventListener('click', () => {
+    // The fog transition (attachFogToggle) owns theme switching whenever the
+    // light scene exists. This handler is only the no-Three.js fallback —
+    // running both flips the theme twice, visibly outside the fog cover.
+    if (window._lightScene) return;
+
     // overlay element removed; keep variable for compatibility if needed
     const overlay = null;
 
@@ -191,7 +200,9 @@ themeToggle?.addEventListener('click', () => {
 
             // ---- Resize ----
             function resize() {
-                dpr = window.devicePixelRatio || 1;
+                // Cap canvas resolution on Safari: full Retina + per-frame
+                // gradients is CPU-bound there; the glow scene hides the difference.
+                dpr = Math.min(window.devicePixelRatio || 1, IS_SAFARI ? 1.25 : 2);
                 W = window.innerWidth;
                 H = window.innerHeight;
                 canvas.width = W * dpr;
@@ -750,7 +761,7 @@ themeToggle?.addEventListener('click', () => {
         ctx.strokeStyle = `rgba(255, 140, 20, ${0.7 * openness})`;
         ctx.lineWidth = 2;
         ctx.shadowColor = '#ff6600';
-        ctx.shadowBlur = 20 * openness;
+        ctx.shadowBlur = IS_SAFARI ? 0 : 20 * openness;
         ctx.beginPath();
         ctx.moveTo(cx - eyeW, cy);
         ctx.bezierCurveTo(cx - eyeW * 0.5, cy - eyeH * 1.4, cx + eyeW * 0.5, cy - eyeH * 1.4, cx + eyeW, cy);
@@ -1357,13 +1368,28 @@ themeToggle?.addEventListener('click', () => {
     const beamPauseToggleBtn = document.getElementById('beam-pause-toggle');
     const beamLogCoordsBtn = document.getElementById('beam-log-coords');
 
+    function syncViewportPaintGuard() {
+        const shouldGuard = document.body.classList.contains('light-mode') && window.scrollY < 8;
+        document.body.classList.toggle('viewport-paint-guard', shouldGuard);
+    }
+
     // Sync light-mode class with current state on init
     if (isLightMode) {
         document.body.classList.add('light-mode');
     }
+    syncViewportPaintGuard();
 
     // ----- Renderer -----
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    // WebGLRenderer THROWS when a context can't be created (blocklisted GPU,
+    // WebGL disabled). Without this guard the exception kills the rest of
+    // main.js — including the fog toggle attached further down.
+    let renderer;
+    try {
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    } catch (err) {
+        console.warn('[lightScene] WebGL unavailable — skipping light scene', err);
+        return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // Canvas lives inside .hero — size to the canvas element, not the window.
     const canvasW = () => canvas.clientWidth || window.innerWidth;
@@ -1633,6 +1659,19 @@ themeToggle?.addEventListener('click', () => {
     camera.position.copy(defaultCameraPos);
     camera.lookAt(defaultCameraTarget);
 
+    function resizeLightScene() {
+        const width = canvasW();
+        const height = canvasH();
+        if (!isFinite(width) || !isFinite(height) || width <= 0 || height <= 0) return;
+
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        if (!isTransitioningLight && !document.body.classList.contains('dark')) {
+            camera.fov = computeResponsiveFov();
+        }
+        camera.updateProjectionMatrix();
+    }
+
     // ----- Lights -----
     // Soft directional + ambient only — sun mesh and its PointLight removed entirely.
     const dirLight = new THREE.DirectionalLight(0xfff0cc, 1.25);
@@ -1641,6 +1680,10 @@ themeToggle?.addEventListener('click', () => {
     scene.add(new THREE.AmbientLight(0xd0d4dc, 0.6));
 
     // ----- Sky (large PlaneGeometry with GLSL ShaderMaterial) -----
+    const SKY_ORIGINAL_WIDTH = 60;
+    const SKY_ORIGINAL_HEIGHT = 35;
+    const SKY_RENDER_WIDTH = 420;
+
     const skyMat = new THREE.ShaderMaterial({
         uniforms: {
             uHorizonDissolve: { value: exp2Sky.horizonDissolve.clone() },
@@ -1648,21 +1691,23 @@ themeToggle?.addEventListener('click', () => {
             uCloudBelly2: { value: exp2Sky.cloudBelly2.clone() },
             uStormDark: { value: exp2Sky.stormDark.clone() },
             uZenith: { value: exp2Sky.zenith.clone() },
+            uOriginalSkySize: { value: new THREE.Vector2(SKY_ORIGINAL_WIDTH, SKY_ORIGINAL_HEIGHT) },
         },
         vertexShader: `
-            varying vec2 vUv;
+            varying vec2 vLocalPos;
             void main() {
-                vUv = uv;
+                vLocalPos = position.xy;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
             }
         `,
         fragmentShader: `
-            varying vec2 vUv;
+            varying vec2 vLocalPos;
             uniform vec3 uHorizonDissolve;
             uniform vec3 uHorizonSmoke;
             uniform vec3 uCloudBelly2;
             uniform vec3 uStormDark;
             uniform vec3 uZenith;
+            uniform vec2 uOriginalSkySize;
 
             // Smooth value noise + 6-octave fbm. The high octave count makes the
             // resulting field smooth enough that it never reads as discrete cells
@@ -1694,8 +1739,8 @@ themeToggle?.addEventListener('click', () => {
             }
 
             void main() {
-                float y = vUv.y;
-                float x = vUv.x;
+                float y = clamp((vLocalPos.y + uOriginalSkySize.y * 0.5) / uOriginalSkySize.y, 0.0, 1.0);
+                float x = clamp((vLocalPos.x + uOriginalSkySize.x * 0.5) / uOriginalSkySize.x, 0.0, 1.0);
 
                 // ----- Layered vertical gradient -----
                 // Five bands so the sky has volumetric depth AND dissolves into
@@ -1779,7 +1824,7 @@ themeToggle?.addEventListener('click', () => {
         depthWrite: false,
         fog: false,
     });
-    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(60, 35), skyMat);
+    const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(SKY_RENDER_WIDTH, SKY_ORIGINAL_HEIGHT), skyMat);
     skyPlane.position.set(0, 5, -20);
     scene.add(skyPlane);
 
@@ -1793,8 +1838,8 @@ themeToggle?.addEventListener('click', () => {
         depthWrite: false,
         fog: false,
     });
-    const skyCeiling = new THREE.Mesh(new THREE.PlaneGeometry(80, 30), skyCeilingMat);
-    skyCeiling.position.set(0, 37.5, -20);
+    const skyCeiling = new THREE.Mesh(new THREE.PlaneGeometry(SKY_RENDER_WIDTH, 50), skyCeilingMat);
+    skyCeiling.position.set(0, 47.5, -20);
     scene.add(skyCeiling);
     if (FOG_MODE === 'height') {
         renderer.setClearColor(heightFog.color, 1);
@@ -1820,6 +1865,7 @@ themeToggle?.addEventListener('click', () => {
     }
 
     // ----- Mountains — flat silhouette layers -----
+    const MOUNTAIN_EXTENSION_SCALE = 2.8;
     const layerSpecs = [
         // Farthest Range (Dark silhouette)
         { z: -80,  color: '#2b3642', opacity: 0.15, seed: 2,  y: 0.0, peakScale: 8.0, w: 290, freq: 3.0 },
@@ -1842,7 +1888,10 @@ themeToggle?.addEventListener('click', () => {
     let gandalfLayerHeights = [];
 
     const mountainMeshes = layerSpecs.map((spec, layerIdx) => {
-        const geo = new THREE.PlaneGeometry(spec.w, 5, 120, 1);
+        const profileW = spec.w;
+        const renderW = profileW * MOUNTAIN_EXTENSION_SCALE;
+        const segments = Math.max(120, Math.round(120 * MOUNTAIN_EXTENSION_SCALE));
+        const geo = new THREE.PlaneGeometry(renderW, 5, segments, 1);
         const pos = geo.attributes.position;
         const topYs = [];
 
@@ -1850,7 +1899,7 @@ themeToggle?.addEventListener('click', () => {
             const lx = pos.getX(i);
             const ly = pos.getY(i);
             if (ly > 0) { // Displace only the top row
-                const nx = (lx + spec.w / 2) / spec.w;
+                const nx = (lx + profileW / 2) / profileW;
                 let h = ridgedNoise(nx * spec.freq, spec.seed) * spec.peakScale;
 
                 // Frame Barad-dûr with broad, misty shoulders and a modest saddle.
@@ -3728,14 +3777,8 @@ themeToggle?.addEventListener('click', () => {
     // Recompute FOV based on aspect so narrower viewports don't crop the scene
     // horizontally. Skip the FOV update while a transition (light↔dark zoom)
     // is mid-tween — GSAP owns camera.fov in that window and we'd fight it.
-    window.addEventListener('resize', () => {
-        renderer.setSize(canvasW(), canvasH(), false);
-        camera.aspect = canvasW() / canvasH();
-        if (!isTransitioningLight && !document.body.classList.contains('dark')) {
-            camera.fov = computeResponsiveFov();
-        }
-        camera.updateProjectionMatrix();
-    });
+    window.addEventListener('resize', resizeLightScene);
+    window.addEventListener('scroll', syncViewportPaintGuard, { passive: true });
 
     // ----- Render loop (NO mouse parallax, NO scroll transform) -----
     function renderLight() {
@@ -4049,8 +4092,7 @@ themeToggle?.addEventListener('click', () => {
     if (!toggle || !fog) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const TOTAL_MS  = 1100; // matches CSS animation duration
-    const SWAP_MS   =  550; // 50% — peak fog density
+    const TOTAL_MS  = 1000; // watchdog fallback only — real timing comes from animation events
 
     toggle.addEventListener('click', (e) => {
         const ls = window._lightScene;
@@ -4099,14 +4141,32 @@ themeToggle?.addEventListener('click', () => {
         void fog.offsetWidth; // force reflow so re-adding restarts keyframes
         fog.classList.add('active');
 
-        // Swap themes at peak fog density (under fully-opaque cover)
-        setTimeout(swap, SWAP_MS);
-
-        // Clean up after animation completes
-        setTimeout(() => {
+        // Drive swap + cleanup from the fog's own animation clock, not
+        // setTimeout: if the browser stalls starting the animations, wall-clock
+        // timers fire while the fog is still thin and the swap shows through.
+        // fog-swap-tick ends exactly when fog-bg reaches its opaque hold.
+        let swapped = false;
+        let watchdog = null;
+        const finish = () => {
+            if (!swapped) { swapped = true; swap(); }
+            clearTimeout(watchdog);
+            fog.removeEventListener('animationend', onAnimEnd);
             fog.classList.remove('active');
             ls.isTransitioning = false;
-        }, TOTAL_MS + 50);
+        };
+        const onAnimEnd = (ev) => {
+            if (ev.target !== fog) return; // ignore bubbled .fog-layer events
+            if (ev.animationName === 'fog-swap-tick' && !swapped) {
+                swapped = true;
+                swap();
+            } else if (ev.animationName === 'fog-bg') {
+                finish();
+            }
+        };
+        fog.addEventListener('animationend', onAnimEnd);
+        // Watchdog: if animation events never arrive (tab hidden, animations
+        // disabled), force-complete so the page can't get stuck mid-transition.
+        watchdog = setTimeout(finish, TOTAL_MS + 1000);
 
         e.stopImmediatePropagation();
     }, { capture: true });
