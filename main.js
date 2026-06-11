@@ -811,96 +811,168 @@ themeToggle?.addEventListener('click', () => {
     }
 
     // ================================================================
-    //  BEAM — from eye to cursor
+    //  BEAM — Sauron's fiery gaze, eye to cursor
     // ================================================================
+    let beamMotes = [];
+
+    // Layered traveling sine waves — cheap flame turbulence. Phases move
+    // with time so ripples appear to pour outward from the eye.
+    function beamTurb(t, time, seed) {
+        return Math.sin(t * 9 + time * 0.0035 + seed) * 0.5
+             + Math.sin(t * 21 - time * 0.006 + seed * 2.3) * 0.3
+             + Math.sin(t * 38 + time * 0.0105 + seed * 4.1) * 0.2;
+    }
+
     function drawBeam(eyeX, eyeY, time) {
         if (!hasSeenCursor) return;
         const dx = mouse.x - eyeX;
         const dy = mouse.y - eyeY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 50) return;
+        if (dist < 50) { beamMotes = []; return; }
 
         let openness = 1 - blinkProgress;
         openness = Math.max(0, Math.min(1, openness));
         if (openness < 0.1) return;
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-
-        const dirX = dx / dist;
-        const dirY = dy / dist;
+        // Axis follows the smoothed cursor so the fire lags with weight
+        const ax = smoothMouse.x - eyeX;
+        const ay = smoothMouse.y - eyeY;
+        const alen = Math.sqrt(ax * ax + ay * ay) || 1;
+        const dirX = ax / alen;
+        const dirY = ay / alen;
         const perpX = -dirY;
         const perpY = dirX;
 
-        // Flickering intensity
-        const flick = 0.14 + Math.sin(time * 0.005) * 0.04 + Math.sin(time * 0.013) * 0.025;
+        // Uneven firelight flicker
+        const flick = 0.45
+            + Math.sin(time * 0.005) * 0.08
+            + Math.sin(time * 0.013) * 0.05
+            + Math.sin(time * 0.031) * 0.03;
         const alpha = flick * openness;
 
-        // Wide soft body of the beam
-        const glowWStart = 18 * openness;
-        const glowWEnd = 10;
-        const glowGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        glowGrad.addColorStop(0, `rgba(255, 120, 25, ${alpha * 0.3})`);
-        glowGrad.addColorStop(0.45, `rgba(255, 80, 15, ${alpha * 0.2})`);
-        glowGrad.addColorStop(1, `rgba(255, 60, 12, ${alpha * 0.08})`);
+        // Half-width: tight at the eye slit, spreading like a searchlight
+        const spread = Math.min(alen / 600, 1);
+        const halfW = t => (8 + t * (10 + 9 * spread)) * (0.55 + 0.45 * openness);
+        // Turbulence stays calm at the eye and grows downstream
+        const grow = t => 0.2 + 0.8 * t;
+        // Slow snake of the whole beam axis
+        const sway = t => beamTurb(t, time * 0.6, 9) * 14 * grow(t);
 
-        ctx.beginPath();
-        ctx.moveTo(eyeX + perpX * glowWStart, eyeY + perpY * glowWStart);
-        ctx.lineTo(smoothMouse.x + perpX * glowWEnd, smoothMouse.y + perpY * glowWEnd);
-        ctx.lineTo(smoothMouse.x - perpX * glowWEnd, smoothMouse.y - perpY * glowWEnd);
-        ctx.lineTo(eyeX - perpX * glowWStart, eyeY - perpY * glowWStart);
-        ctx.closePath();
-        ctx.fillStyle = glowGrad;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        const SEG = 24;
+
+        // Filled flame-sheet: both edges displaced by independent turbulence
+        function flamePath(scale, seedA, seedB, turbAmt) {
+            ctx.beginPath();
+            for (let i = 0; i <= SEG; i++) {
+                const t = i / SEG;
+                const cx = eyeX + dirX * t * alen + perpX * sway(t);
+                const cy = eyeY + dirY * t * alen + perpY * sway(t);
+                const w = halfW(t) * scale * (1 + beamTurb(t, time, seedA) * turbAmt * grow(t));
+                if (i === 0) ctx.moveTo(cx + perpX * w, cy + perpY * w);
+                else ctx.lineTo(cx + perpX * w, cy + perpY * w);
+            }
+            for (let i = SEG; i >= 0; i--) {
+                const t = i / SEG;
+                const cx = eyeX + dirX * t * alen + perpX * sway(t);
+                const cy = eyeY + dirY * t * alen + perpY * sway(t);
+                const w = halfW(t) * scale * (1 + beamTurb(t, time, seedB) * turbAmt * grow(t));
+                ctx.lineTo(cx - perpX * w, cy - perpY * w);
+            }
+            ctx.closePath();
+        }
+
+        // Smoky red outer haze
+        const hazeGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
+        hazeGrad.addColorStop(0, `rgba(255, 60, 10, ${alpha * 0.05})`);
+        hazeGrad.addColorStop(0.5, `rgba(200, 35, 5, ${alpha * 0.035})`);
+        hazeGrad.addColorStop(1, `rgba(150, 20, 0, ${alpha * 0.02})`);
+        flamePath(1.8, 3.1, 7.7, 0.5);
+        ctx.fillStyle = hazeGrad;
         ctx.fill();
 
-        // Circular beam formation: multiple thin slices wrapped around the axis.
-        // This avoids a single hard center line and reads more volumetric.
-        const sliceCount = 10;
-        for (let i = 0; i < sliceCount; i++) {
-            const phase = (i / sliceCount) * Math.PI * 2 + time * 0.0012;
-            const ringEye = (5.5 + Math.sin(time * 0.0017 + i * 1.3) * 2.2) * openness;
-            const ringTip = 2.6 + Math.sin(time * 0.002 + i * 0.9) * 0.75;
-            const axialSkew = Math.sin(phase) * ringEye * 0.22;
+        // Main fire body
+        const bodyGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
+        bodyGrad.addColorStop(0, `rgba(255, 140, 35, ${alpha * 0.12})`);
+        bodyGrad.addColorStop(0.4, `rgba(255, 85, 15, ${alpha * 0.09})`);
+        bodyGrad.addColorStop(1, `rgba(230, 55, 10, ${alpha * 0.055})`);
+        flamePath(1, 1.3, 5.9, 0.4);
+        ctx.fillStyle = bodyGrad;
+        ctx.fill();
 
-            const offsetEyeX = perpX * Math.cos(phase) * ringEye + dirX * axialSkew;
-            const offsetEyeY = perpY * Math.cos(phase) * ringEye + dirY * axialSkew;
-            const offsetTipX = perpX * Math.cos(phase) * ringTip + dirX * axialSkew * 0.35;
-            const offsetTipY = perpY * Math.cos(phase) * ringTip + dirY * axialSkew * 0.35;
+        // Hot white-yellow core
+        const coreGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
+        coreGrad.addColorStop(0, `rgba(255, 225, 140, ${alpha * 0.16})`);
+        coreGrad.addColorStop(0.45, `rgba(255, 150, 45, ${alpha * 0.12})`);
+        coreGrad.addColorStop(1, `rgba(255, 95, 25, ${alpha * 0.065})`);
+        flamePath(0.42, 2.7, 4.3, 0.3);
+        ctx.fillStyle = coreGrad;
+        ctx.fill();
 
-            const startX = eyeX + offsetEyeX;
-            const startY = eyeY + offsetEyeY;
-            const endX = smoothMouse.x + offsetTipX;
-            const endY = smoothMouse.y + offsetTipY;
-
-            const wobble = Math.sin(time * 0.003 + i * 1.7) * 6;
-            const ctrlX = (startX + endX) * 0.5 + perpX * wobble;
-            const ctrlY = (startY + endY) * 0.5 + perpY * wobble;
-
-            const sliceGrad = ctx.createLinearGradient(startX, startY, endX, endY);
-            sliceGrad.addColorStop(0, `rgba(255, 165, 55, ${alpha * 0.28})`);
-            sliceGrad.addColorStop(0.35, `rgba(255, 105, 20, ${alpha * 0.2})`);
-            sliceGrad.addColorStop(1, `rgba(255, 70, 15, ${alpha * 0.07})`);
-            ctx.strokeStyle = sliceGrad;
-            ctx.lineWidth = 1.4 + Math.sin(time * 0.0022 + i) * 0.45;
-            ctx.lineCap = 'round';
+        // Flame licks — wavy filaments living inside the beam
+        const LICKS = 4;
+        const STEPS = 12;
+        for (let i = 0; i < LICKS; i++) {
+            const seed = i * 7.3;
+            const reach = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 0.0008 + i * 2.1));
             ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+            for (let s = 0; s <= STEPS; s++) {
+                const t = (s / STEPS) * reach;
+                const off = beamTurb(t, time * 1.4, seed) * halfW(t) * 0.9 * grow(s / STEPS)
+                          + Math.sin(i * 2.4) * halfW(t) * 0.25;
+                const px = eyeX + dirX * t * alen + perpX * (off + sway(t));
+                const py = eyeY + dirY * t * alen + perpY * (off + sway(t));
+                if (s === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            const lickFlick = 0.5 + 0.5 * Math.sin(time * 0.007 + i * 4.7);
+            const lickGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
+            lickGrad.addColorStop(0, `rgba(255, 200, 90, ${alpha * (0.08 + 0.1 * lickFlick)})`);
+            lickGrad.addColorStop(0.5, `rgba(255, 120, 30, ${alpha * (0.05 + 0.07 * lickFlick)})`);
+            lickGrad.addColorStop(1, `rgba(220, 60, 10, ${alpha * 0.03})`);
+            ctx.strokeStyle = lickGrad;
+            ctx.lineWidth = 1.2 + lickFlick;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
             ctx.stroke();
         }
 
-        // Soft center pass to keep beam cohesion without recreating a harsh line.
-        const centerGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        centerGrad.addColorStop(0, `rgba(255, 180, 70, ${alpha * 0.24})`);
-        centerGrad.addColorStop(0.5, `rgba(255, 120, 35, ${alpha * 0.14})`);
-        centerGrad.addColorStop(1, `rgba(255, 80, 20, ${alpha * 0.06})`);
-        ctx.strokeStyle = centerGrad;
-        ctx.lineWidth = 3.2 * openness;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(eyeX, eyeY);
-        ctx.lineTo(smoothMouse.x, smoothMouse.y);
-        ctx.stroke();
+        // Fire motes streaming from the eye toward the cursor
+        if (beamMotes.length < 20 && Math.random() < 0.4) {
+            beamMotes.push({
+                t: 0.04 + Math.random() * 0.1,
+                off: (Math.random() - 0.5) * 1.4,   // fraction of halfW
+                speed: 0.004 + Math.random() * 0.008,
+                drift: (Math.random() - 0.5) * 0.012,
+                size: 1 + Math.random() * 2.2,
+                seed: Math.random() * 10
+            });
+        }
+        for (const m of beamMotes) {
+            m.t += m.speed;
+            m.off += m.drift;
+        }
+        beamMotes = beamMotes.filter(m => m.t < 1);
+        for (const m of beamMotes) {
+            const t = m.t;
+            const jitter = beamTurb(t + m.seed, time * 2, m.seed) * 2;
+            const px = eyeX + dirX * t * alen + perpX * (m.off * halfW(t) + sway(t) + jitter);
+            const py = eyeY + dirY * t * alen + perpY * (m.off * halfW(t) + sway(t) + jitter);
+            const fade = Math.min(1, (1 - t) * 4) * Math.min(1, t * 8);
+            const ma = alpha * 0.5 * fade;
+            const r = m.size * (1 + grow(t));
+            const g = Math.floor(200 - 120 * t);
+            const b = Math.floor(110 - 90 * t);
+            const moteGrad = ctx.createRadialGradient(px, py, 0, px, py, r);
+            moteGrad.addColorStop(0, `rgba(255, ${g}, ${b}, ${ma})`);
+            moteGrad.addColorStop(1, `rgba(255, ${Math.floor(g * 0.6)}, 0, 0)`);
+            ctx.fillStyle = moteGrad;
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
@@ -1301,6 +1373,7 @@ themeToggle?.addEventListener('click', () => {
         if (!isDark) {
             particles = [];
             embers = [];
+            beamMotes = [];
             requestAnimationFrame(render);
             return;
         }
