@@ -833,16 +833,16 @@ themeToggle?.addEventListener('click', () => {
         const perpY = dirX;
 
         // Flickering intensity
-        const flick = 0.05 + Math.sin(time * 0.005) * 0.02 + Math.sin(time * 0.013) * 0.012;
+        const flick = 0.14 + Math.sin(time * 0.005) * 0.04 + Math.sin(time * 0.013) * 0.025;
         const alpha = flick * openness;
 
         // Wide soft body of the beam
         const glowWStart = 18 * openness;
         const glowWEnd = 10;
         const glowGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        glowGrad.addColorStop(0, `rgba(255, 120, 25, ${alpha * 0.24})`);
-        glowGrad.addColorStop(0.45, `rgba(255, 80, 15, ${alpha * 0.14})`);
-        glowGrad.addColorStop(1, 'rgba(255, 60, 12, 0)');
+        glowGrad.addColorStop(0, `rgba(255, 120, 25, ${alpha * 0.3})`);
+        glowGrad.addColorStop(0.45, `rgba(255, 80, 15, ${alpha * 0.2})`);
+        glowGrad.addColorStop(1, `rgba(255, 60, 12, ${alpha * 0.08})`);
 
         ctx.beginPath();
         ctx.moveTo(eyeX + perpX * glowWStart, eyeY + perpY * glowWStart);
@@ -877,9 +877,9 @@ themeToggle?.addEventListener('click', () => {
             const ctrlY = (startY + endY) * 0.5 + perpY * wobble;
 
             const sliceGrad = ctx.createLinearGradient(startX, startY, endX, endY);
-            sliceGrad.addColorStop(0, `rgba(255, 165, 55, ${alpha * 0.22})`);
-            sliceGrad.addColorStop(0.35, `rgba(255, 105, 20, ${alpha * 0.14})`);
-            sliceGrad.addColorStop(1, 'rgba(255, 70, 15, 0)');
+            sliceGrad.addColorStop(0, `rgba(255, 165, 55, ${alpha * 0.28})`);
+            sliceGrad.addColorStop(0.35, `rgba(255, 105, 20, ${alpha * 0.2})`);
+            sliceGrad.addColorStop(1, `rgba(255, 70, 15, ${alpha * 0.07})`);
             ctx.strokeStyle = sliceGrad;
             ctx.lineWidth = 1.4 + Math.sin(time * 0.0022 + i) * 0.45;
             ctx.lineCap = 'round';
@@ -891,9 +891,9 @@ themeToggle?.addEventListener('click', () => {
 
         // Soft center pass to keep beam cohesion without recreating a harsh line.
         const centerGrad = ctx.createLinearGradient(eyeX, eyeY, smoothMouse.x, smoothMouse.y);
-        centerGrad.addColorStop(0, `rgba(255, 180, 70, ${alpha * 0.18})`);
-        centerGrad.addColorStop(0.5, `rgba(255, 120, 35, ${alpha * 0.09})`);
-        centerGrad.addColorStop(1, 'rgba(255, 80, 20, 0)');
+        centerGrad.addColorStop(0, `rgba(255, 180, 70, ${alpha * 0.24})`);
+        centerGrad.addColorStop(0.5, `rgba(255, 120, 35, ${alpha * 0.14})`);
+        centerGrad.addColorStop(1, `rgba(255, 80, 20, ${alpha * 0.06})`);
         ctx.strokeStyle = centerGrad;
         ctx.lineWidth = 3.2 * openness;
         ctx.lineCap = 'round';
