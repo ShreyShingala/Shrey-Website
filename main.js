@@ -1441,16 +1441,10 @@ themeToggle?.addEventListener('click', () => {
     const beamPauseToggleBtn = document.getElementById('beam-pause-toggle');
     const beamLogCoordsBtn = document.getElementById('beam-log-coords');
 
-    function syncViewportPaintGuard() {
-        const shouldGuard = document.body.classList.contains('light-mode') && window.scrollY < 8;
-        document.body.classList.toggle('viewport-paint-guard', shouldGuard);
-    }
-
     // Sync light-mode class with current state on init
     if (isLightMode) {
         document.body.classList.add('light-mode');
     }
-    syncViewportPaintGuard();
 
     // ----- Renderer -----
     // WebGLRenderer THROWS when a context can't be created (blocklisted GPU,
@@ -3876,7 +3870,6 @@ themeToggle?.addEventListener('click', () => {
     // horizontally. Skip the FOV update while a transition (light↔dark zoom)
     // is mid-tween — GSAP owns camera.fov in that window and we'd fight it.
     window.addEventListener('resize', resizeLightScene);
-    window.addEventListener('scroll', syncViewportPaintGuard, { passive: true });
 
     // ----- Render loop (NO mouse parallax, NO scroll transform) -----
     function renderLight() {
@@ -4272,4 +4265,27 @@ themeToggle?.addEventListener('click', () => {
 
         e.stopImmediatePropagation();
     }, { capture: true });
+})();
+
+/* ============================================================================
+   MIST BAND — off-screen gate
+   ----------------------------------------------------------------------------
+   The band's fog layers each carry an SVG displacement filter, which costs
+   compositing work on every frame they are painted. Nothing about the band
+   depends on scroll position, so the only saving available is to stop painting
+   it while it is nowhere near the viewport.
+
+   Dark mode gives #mist-band display:none from CSS, which zeroes the element's
+   box, so the observer reports it as off screen and the layers drop on their
+   own — no theme hook needed. Same for the <=640px breakpoint.
+   ========================================================================== */
+(function mistBandGate() {
+    const band = document.getElementById('mist-band');
+    if (!band || typeof IntersectionObserver === 'undefined') return;
+
+    new IntersectionObserver((entries) => {
+        for (const e of entries) {
+            band.classList.toggle('mist-idle', !e.isIntersecting);
+        }
+    }, { rootMargin: '200px 0px' }).observe(band);
 })();

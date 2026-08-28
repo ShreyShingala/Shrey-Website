@@ -34,6 +34,26 @@
             </feTurbulence>
             <feDisplacementMap in="SourceGraphic" in2="noise" scale="55"/>
         </filter>
+        <!-- Same warp for the mist band, but deliberately NOT animated. The
+             filter above re-runs feTurbulence every frame because its
+             baseFrequency animates — fine for a 1s theme transition, ruinous
+             for a band that is always on screen (measured ~4x the cost of a
+             plain blur, and Blink computes turbulence on the CPU). With a
+             static filter the warped layer is rasterised once and only its
+             transform and opacity animate, which compositing handles for free.
+             The churn comes from five layers sliding across each other. -->
+        <filter id="mist-turbulence" x="-15%" y="-15%" width="130%" height="130%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.013 0.021" numOctaves="2" seed="7" result="mistnoise"/>
+            <feDisplacementMap in="SourceGraphic" in2="mistnoise" scale="46"/>
+        </filter>
+        <!-- A second seed and a slightly coarser noise. With one filter every
+             fog layer warps to the same shape and the stack reads as one sheet
+             seen twice; alternating the two gives the layers distinct silhouettes,
+             which is most of what sells the depth. -->
+        <filter id="mist-turbulence-b" x="-15%" y="-15%" width="130%" height="130%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.009 0.016" numOctaves="2" seed="23" result="mistnoiseb"/>
+            <feDisplacementMap in="SourceGraphic" in2="mistnoiseb" scale="58"/>
+        </filter>
     </svg>
 
     <!-- Rolling fog overlay used by light↔dark transition -->
@@ -113,9 +133,24 @@
                 <a href="https://www.linkedin.com/in/shrey-shingala1/" target="_blank" rel="noopener">LinkedIn</a>
                 <a href="mailto:shreyshingala1@gmail.com">Email</a>
                 <a href="https://calendly.com/d/cxw9-zgv-z4g" target="_blank" rel="noopener">Schedule</a>
-                <a href="resume.pdf" target="_blank" rel="noopener">Resume</a>
+                <a href="docs/resume.pdf" target="_blank" rel="noopener">Resume</a>
             </div>
         </section>
+
+        <!-- Mist band — the chapter break between the light-mode 3D scene and
+             the page content. .mist-veil is the occluder that actually ends the
+             scene; the fog layers drift over it and fray past both edges, so
+             neither boundary reads as a line. -->
+        <div id="mist-band" aria-hidden="true">
+            <div class="mist-stage">
+                <div class="mist-veil"></div>
+                <div class="mist-fog mist-fog-1"></div>
+                <div class="mist-fog mist-fog-2"></div>
+                <div class="mist-fog mist-fog-3"></div>
+                <div class="mist-fog mist-fog-4"></div>
+                <div class="mist-fog mist-fog-5"></div>
+            </div>
+        </div>
 
         <div id="content-curtain">
         <section id="about">

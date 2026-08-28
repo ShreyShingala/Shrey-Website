@@ -121,26 +121,6 @@ body.light-mode .hero > .divider {
     z-index: 3;
 }
 
-/* Chrome can occasionally leave a thin unpainted strip at the bottom of a
-   newly-opened fullscreen window until the first forced relayout. Keep a
-   temporary top-of-hero paint guard there; JS drops it as soon as the user
-   scrolls away from the first viewport. */
-body.light-mode.viewport-paint-guard #main-content::after {
-    content: '';
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: -1px;
-    height: 40px;
-    z-index: 4;
-    pointer-events: none;
-    background: linear-gradient(to bottom,
-        rgba(240, 235, 224, 0),
-        rgba(240, 235, 224, 0.96) 46%,
-        #f0ebe0 100%);
-    transform: translateZ(0);
-}
-
 /* Rolling fog overlay used by the light↔dark toggle transition. Four
    layered grey fog masses sweep in from the left and right edges with
    internal background-position churn (cloud puffs scrolling within each
@@ -340,101 +320,223 @@ body.light-mode .hero {
     align-items: center;
 }
 
-/* Cloud band — warm parchment-toned dust puffs orbiting + drifting so the
-   seam feels alive. Sits low against the hero bottom and overlaps just
-   slightly into the canvas. */
-body.light-mode .hero::before {
-    content: '';
-    position: absolute;
-    bottom: calc(-1 * var(--light-scene-bottom-bleed, 96px));
-    left: -50vw;
-    right: -50vw;
-    height: calc(8rem + var(--light-scene-bottom-bleed, 96px));
+/* ============================================
+   MIST BAND — the chapter break between the light-mode 3D scene and the
+   page content. Replaces the old .hero::before cloud band and .hero::after
+   parchment fade, which were pseudo-elements at the same z-index as
+   #content-curtain: the curtain's opaque background painted later in the DOM
+   and clipped the last ~96px of the fade, cutting it off at ~0.6 alpha. That
+   clipped edge was the hard seam. A real element at a higher z-index cannot
+   be clipped that way.
+
+   Two layers, painted bottom to top:
+     1. .mist-veil  — the occluder. Transparent where the mountains still
+                      show, solid parchment before the canvas edge. This is
+                      what actually ends the scene.
+     2. .mist-fog-N — turbulence-warped grey wisps, unclipped so they fray
+                      out past both edges of the band. Warm-grey rather than
+                      the scene's cool #7e8a97, so the cool→warm hue jump is
+                      bridged rather than crossed raw.
+
+   Light mode only. Dark mode has no scene to break away from.
+   ============================================ */
+
+#mist-band { display: none; }
+
+body.light-mode #mist-band {
+    display: block;
+    position: relative;
+    /* Above #content-curtain (2), so the fog can spill down over the top of
+       the About section instead of being cut off by the curtain background. */
+    z-index: 3;
     pointer-events: none;
-    z-index: 1;
-    background:
-        radial-gradient(ellipse 30% 60% at 50% 60%, rgba(228, 220, 200, 0.82) 0%, rgba(228, 220, 200, 0.45) 40%, transparent 80%),
-        radial-gradient(ellipse 35% 70% at 50% 60%, rgba(236, 228, 210, 0.82) 0%, rgba(236, 228, 210, 0.5) 38%, transparent 78%),
-        radial-gradient(ellipse 28% 65% at 50% 60%, rgba(220, 212, 192, 0.78) 0%, rgba(220, 212, 192, 0.45) 40%, transparent 80%),
-        radial-gradient(ellipse 32% 70% at 50% 60%, rgba(232, 224, 204, 0.82) 0%, rgba(232, 224, 204, 0.5) 40%, transparent 78%);
-    background-size: 220% 240%, 250% 220%, 200% 260%, 240% 220%;
-    background-repeat: no-repeat;
-    /* Two layered animations: orbital swirl (each puff loops a circular path)
-       plus a gentler opacity breath so the band visibly thickens and thins. */
-    animation:
-        cloudSwirl 14s linear infinite,
-        cloudBreathe 7s ease-in-out infinite;
-    will-change: background-position, opacity;
-    /* Soft top fade so the puffs melt into the canvas instead of cutting off. */
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, #000 30%, #000 100%);
+    /* Both tunable by eye. The curl loops need vertical room or they read as
+       jitter instead of swirls; comfortable range is 240–480px. --mist-rise
+       is how far the band reaches up into the hero, and must stay LARGER than
+       the point where .mist-veil reaches full opacity (52%), or the canvas's
+       bottom edge shows through as a line again. */
+    height: var(--mist-band-height, 340px);
+    margin-top: calc(-1 * var(--mist-rise, 200px));
+    margin-bottom: calc(-1 * var(--mist-sink, 48px));
 }
 
-/* Parchment fade — bridges canvas into cream. Lower and shorter than before
-   so the canvas keeps more of its real content visible. */
-body.light-mode .hero::after {
-    content: '';
+/* Full-bleed stage. The -50vw insets match the pattern already used by
+   #content-curtain::before; body.light-mode sets overflow-x: hidden, so this
+   cannot produce a horizontal scrollbar. Deliberately NOT clipped vertically —
+   the fog is supposed to escape the band. */
+body.light-mode .mist-stage {
     position: absolute;
-    bottom: calc(-1 * var(--light-scene-bottom-bleed, 96px));
-    left: -50vw;
-    right: -50vw;
-    height: calc(10rem + var(--light-scene-bottom-bleed, 96px));
-    pointer-events: none;
-    z-index: 2;
+    top: 0;
+    bottom: 0;
+    /* Exactly viewport-wide and viewport-aligned: 50% is half the 850px column,
+       so this lands the stage on the viewport edges rather than overshooting by
+       a full 50vw on each side (which doubled the ink canvas's pixel count).
+       body.light-mode sets overflow-x: hidden, so the scrollbar-width overhang
+       of 100vw cannot produce a horizontal scrollbar. */
+    left: calc(50% - 50vw);
+    width: 100vw;
+}
+
+body.light-mode .mist-veil {
+    position: absolute;
+    inset: 0;
     background: linear-gradient(to bottom,
-        transparent 0%,
-        rgba(240, 235, 224, 0.06) 18%,
-        rgba(240, 235, 224, 0.22) 38%,
-        rgba(240, 235, 224, 0.50) 56%,
-        rgba(240, 235, 224, 0.78) 72%,
-        rgba(240, 235, 224, 0.94) 86%,
-        #f0ebe0 94%,
+        rgba(240, 235, 224, 0)    0%,
+        rgba(240, 235, 224, 0.08) 12%,
+        rgba(240, 235, 224, 0.26) 26%,
+        rgba(240, 235, 224, 0.55) 38%,
+        rgba(240, 235, 224, 0.86) 47%,
+        #f0ebe0 52%,
         #f0ebe0 100%);
 }
 
-@keyframes cloudBreathe {
-    0%, 100% { opacity: 0.85; }
-    50%      { opacity: 1.0; }
+/* ---- Fog mass ---- */
+
+body.light-mode .mist-fog {
+    position: absolute;
+    /* Overshoot horizontally so the turbulence displacement has material to
+       chew on at the edges, and vertically so wisps clear the band. */
+    top: -22%;
+    bottom: -26%;
+    left: -12%;
+    right: -12%;
+    background-repeat: no-repeat;
+    will-change: transform, opacity;
+    /* Per-layer below. Both band filters are STATIC, unlike #fog-turbulence,
+       whose animated baseFrequency would regenerate the noise every frame for
+       as long as the band is on screen. Without some displacement these layers
+       are visibly ellipses. */
+    /* Fade to nothing on ALL FOUR sides, so the layer has no edge of its own.
+       The horizontal half is not optional: a fog layer is a box inset only 12%
+       past the stage, and it now travels far enough that its own left/right
+       boundary sweeps through the middle of the band. Unmasked, that boundary
+       is a clean vertical line straight across the haze.
+       The vertical half is weighted to the upper band: the fog's job is
+       dissolving the scene, and letting it hang low just dulls the parchment
+       behind the About heading. */
+    -webkit-mask-image:
+        linear-gradient(to bottom, transparent 0%, #000 16%, #000 60%, transparent 94%),
+        linear-gradient(to right, transparent 0%, #000 15%, #000 85%, transparent 100%);
+    -webkit-mask-composite: source-in;
+            mask-image:
+        linear-gradient(to bottom, transparent 0%, #000 16%, #000 60%, transparent 94%),
+        linear-gradient(to right, transparent 0%, #000 15%, #000 85%, transparent 100%);
+            mask-composite: intersect;
 }
 
-/* Each puff orbits its own center on screen at a different phase,
-   giving the band a churning-cloud feel rather than a horizontal drift. */
-@keyframes cloudSwirl {
-    0% {
-        background-position:
-            25% 35%,
-            70% 50%,
-            75% 65%,
-            27% 50%;
-    }
-    25% {
-        background-position:
-            40% 50%,
-            50% 70%,
-            63% 50%,
-            45% 32%;
-    }
-    50% {
-        background-position:
-            25% 65%,
-            30% 50%,
-            75% 35%,
-            63% 50%;
-    }
-    75% {
-        background-position:
-            10% 50%,
-            50% 30%,
-            87% 50%,
-            45% 68%;
-    }
-    100% {
-        background-position:
-            25% 35%,
-            70% 50%,
-            75% 65%,
-            27% 50%;
-    }
+/* Five layers rather than three, ordered back to front. Depth comes from
+   ramping four things together the way distance actually behaves: the far
+   layers are blurrier, darker, larger, and slower; the near ones sharper,
+   lighter, smaller, and quicker. Differing speeds are the parallax cue — a
+   near wisp visibly overtakes a far one.
+
+   Each layer makes a CONTINUOUS left-to-right pass instead of swinging back
+   and forth, so the haze always reads as going somewhere. The loop is hidden
+   by fading the layer out as it leaves and in as it returns, which is why the
+   opacity keyframes sit at the same stops as the travel. Nothing here needs to
+   stay opaque — .mist-veil is what actually separates the scene from the page,
+   so a layer fading through zero can never reopen the seam.
+
+   Colours bridge the scene's cool #7e8a97 toward #f0ebe0 cream. */
+
+body.light-mode .mist-fog-1 {
+    background-image:
+        radial-gradient(ellipse 46% 44% at 24% 46%, rgba(128, 126, 119, 0.72), transparent 68%),
+        radial-gradient(ellipse 52% 48% at 64% 54%, rgba(140, 137, 129, 0.66), transparent 66%),
+        radial-gradient(ellipse 40% 42% at 90% 42%, rgba(124, 122, 116, 0.60), transparent 70%);
+    background-size: 155% 135%;
+    filter: url(#mist-turbulence-b) blur(9px);
+    animation: mistPass1 74s linear infinite;
+    animation-delay: -6s;
+}
+
+body.light-mode .mist-fog-2 {
+    background-image:
+        radial-gradient(ellipse 50% 44% at 38% 42%, rgba(156, 152, 143, 0.66), transparent 67%),
+        radial-gradient(ellipse 44% 42% at 76% 56%, rgba(146, 143, 134, 0.58), transparent 69%);
+    background-size: 148% 130%;
+    filter: url(#mist-turbulence) blur(6px);
+    animation: mistPass2 61s linear infinite;
+    animation-delay: -31s;
+}
+
+body.light-mode .mist-fog-3 {
+    background-image:
+        radial-gradient(ellipse 48% 42% at 56% 44%, rgba(178, 174, 163, 0.62), transparent 66%),
+        radial-gradient(ellipse 42% 40% at 14% 56%, rgba(170, 166, 156, 0.54), transparent 68%);
+    background-size: 140% 126%;
+    filter: url(#mist-turbulence-b) blur(4px);
+    animation: mistPass3 50s linear infinite;
+    animation-delay: -13s;
+}
+
+body.light-mode .mist-fog-4 {
+    background-image:
+        radial-gradient(ellipse 44% 38% at 70% 46%, rgba(200, 196, 185, 0.58), transparent 65%),
+        radial-gradient(ellipse 38% 36% at 28% 56%, rgba(192, 188, 177, 0.50), transparent 67%);
+    background-size: 132% 122%;
+    filter: url(#mist-turbulence) blur(2.5px);
+    animation: mistPass4 41s linear infinite;
+    animation-delay: -27s;
+}
+
+/* Nearest: sharpest and lightest, the wisps that feel close enough to touch. */
+body.light-mode .mist-fog-5 {
+    background-image:
+        radial-gradient(ellipse 38% 34% at 44% 48%, rgba(222, 218, 207, 0.52), transparent 64%),
+        radial-gradient(ellipse 32% 30% at 84% 54%, rgba(214, 210, 199, 0.44), transparent 66%);
+    background-size: 124% 118%;
+    filter: url(#mist-turbulence-b) blur(1.5px);
+    animation: mistPass5 33s linear infinite;
+    animation-delay: -5s;
+}
+
+/* Travel stops sit at 10%/90% of the timeline and at 80% of the amplitude, so
+   position stays proportional to time — with linear timing the drift is a
+   genuinely constant glide rather than speeding up in the middle. The ramps are
+   kept short on purpose: at a 16% fade the five layers spent enough of each
+   cycle in transit that total cover dipped ~36%, which reads as the haze
+   pulsing rather than drifting. The vertical component and the scale creep
+   differ per layer, which is the "moving around a bit" on top of the pass. */
+@keyframes mistPass1 {
+    0%   { transform: translate3d(-82%, 3%, 0)     scale(1.180); opacity: 0; }
+    10%  { transform: translate3d(-65.6%, 2.4%, 0) scale(1.188); opacity: 1; }
+    90%  { transform: translate3d(65.6%, -2.4%, 0) scale(1.252); opacity: 1; }
+    100% { transform: translate3d(82%, -3%, 0)     scale(1.260); opacity: 0; }
+}
+@keyframes mistPass2 {
+    0%   { transform: translate3d(-76%, -2.5%, 0)   scale(1.120); opacity: 0; }
+    10%  { transform: translate3d(-60.8%, -1.95%, 0) scale(1.127); opacity: 1; }
+    90%  { transform: translate3d(60.8%, 2.45%, 0)  scale(1.183); opacity: 1; }
+    100% { transform: translate3d(76%, 3%, 0)       scale(1.190); opacity: 0; }
+}
+@keyframes mistPass3 {
+    0%   { transform: translate3d(-70%, 2%, 0)      scale(1.080); opacity: 0; }
+    10%  { transform: translate3d(-56%, 1.45%, 0)   scale(1.086); opacity: 1; }
+    90%  { transform: translate3d(56%, -2.95%, 0)   scale(1.134); opacity: 1; }
+    100% { transform: translate3d(70%, -3.5%, 0)    scale(1.140); opacity: 0; }
+}
+@keyframes mistPass4 {
+    0%   { transform: translate3d(-64%, -1.5%, 0)   scale(1.040); opacity: 0; }
+    10%  { transform: translate3d(-51.2%, -1%, 0)   scale(1.046); opacity: 1; }
+    90%  { transform: translate3d(51.2%, 3%, 0)     scale(1.094); opacity: 1; }
+    100% { transform: translate3d(64%, 3.5%, 0)     scale(1.100); opacity: 0; }
+}
+@keyframes mistPass5 {
+    0%   { transform: translate3d(-58%, 1%, 0)      scale(1.000); opacity: 0; }
+    10%  { transform: translate3d(-46.4%, 0.6%, 0)  scale(1.006); opacity: 1; }
+    90%  { transform: translate3d(46.4%, -2.6%, 0)  scale(1.054); opacity: 1; }
+    100% { transform: translate3d(58%, -3%, 0)      scale(1.060); opacity: 0; }
+}
+
+/* Idle state — set by the IntersectionObserver in main.js when the band is
+   fully off screen. Dropping the fog layers stops the SVG turbulence filter,
+   which otherwise recomputes every frame forever; the ink's rAF loop is
+   stopped separately. Same reasoning as #fog-overlay:not(.active). */
+body.light-mode #mist-band.mist-idle .mist-fog { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    body.light-mode .mist-fog { animation: none; }
 }
 
 /* Wrapper for everything after the hero */
@@ -1310,8 +1412,9 @@ body.dark .project:focus-visible {
         padding-top: 3rem;
         padding-bottom: 2.5rem;
     }
-    body.light-mode .hero::before,
-    body.light-mode .hero::after {
+    /* No canvas here, so there is no scene to break away from — the band
+       would just be a grey stripe between two cream sections. */
+    body.light-mode #mist-band {
         display: none;
     }
 
