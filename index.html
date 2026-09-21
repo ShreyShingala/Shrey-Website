@@ -17,31 +17,32 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </head>
 <body>
+    <!-- Boot script: runs before first paint so the theme never flashes and
+         Safari gets its cheaper effect paths (see IS_SAFARI in main.js). -->
+    <script>
+        (function () {
+            var b = document.body;
+            var t = localStorage.getItem('theme');
+            if (t !== 'light') b.classList.add('dark');
+            var ua = navigator.userAgent;
+            if (/Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\//.test(ua)) b.classList.add('is-safari');
+        })();
+    </script>
 
     <a href="#main-content" class="skip-link">Skip to content</a>
 
     <!-- Eye of Sauron — full-viewport canvas (dark mode only, Canvas2D) -->
     <canvas id="sauron-canvas" aria-hidden="true"></canvas>
 
-    <!-- Hidden SVG turbulence filter — warps the fog edges into wispy,
-         organic shapes and morphs over time so it churns instead of sliding. -->
+    <!-- Hidden SVG turbulence filters for the mist band — warp gradient blobs
+         into wispy, organic fog edges. Static on purpose: an animated
+         baseFrequency re-runs feTurbulence + feDisplacementMap on the CPU
+         every frame for every layer that references it. Note the theme
+         transition fog (#fog-overlay) deliberately does NOT use these:
+         browsers rasterise url() filters in software and re-rasterise them
+         when a transform animation starts and ends, which stalled the main
+         thread at both ends of every toggle. -->
     <svg width="0" height="0" aria-hidden="true" style="position:absolute">
-        <filter id="fog-turbulence" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.011 0.018" numOctaves="2" seed="3" result="noise">
-                <animate attributeName="baseFrequency"
-                         values="0.011 0.018; 0.018 0.024; 0.012 0.020; 0.011 0.018"
-                         dur="9s" repeatCount="indefinite"/>
-            </feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="55"/>
-        </filter>
-        <!-- Same warp for the mist band, but deliberately NOT animated. The
-             filter above re-runs feTurbulence every frame because its
-             baseFrequency animates — fine for a 1s theme transition, ruinous
-             for a band that is always on screen (measured ~4x the cost of a
-             plain blur, and Blink computes turbulence on the CPU). With a
-             static filter the warped layer is rasterised once and only its
-             transform and opacity animate, which compositing handles for free.
-             The churn comes from five layers sliding across each other. -->
         <filter id="mist-turbulence" x="-15%" y="-15%" width="130%" height="130%">
             <feTurbulence type="fractalNoise" baseFrequency="0.013 0.021" numOctaves="2" seed="7" result="mistnoise"/>
             <feDisplacementMap in="SourceGraphic" in2="mistnoise" scale="46"/>
@@ -58,6 +59,7 @@
 
     <!-- Rolling fog overlay used by light↔dark transition -->
     <div id="fog-overlay" aria-hidden="true">
+        <div class="fog-backdrop"></div>
         <div class="fog-layer fog-1"></div>
         <div class="fog-layer fog-2"></div>
         <div class="fog-layer fog-3"></div>

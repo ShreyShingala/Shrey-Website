@@ -9,29 +9,20 @@ const body = document.body;
 // by the inline boot script in index.html; used to dial back expensive effects.
 const IS_SAFARI = body.classList.contains('is-safari');
 
-// Check for saved theme; default to dark
-const savedTheme = localStorage.getItem('theme');
-
-if (savedTheme) {
-    body.classList.toggle('dark', savedTheme === 'dark');
-} else {
+// Theme class is applied by the inline boot script in index.html (before
+// first paint). Re-assert here in case that script was stripped.
+if (!body.classList.contains('dark') && localStorage.getItem('theme') !== 'light') {
     body.classList.add('dark');
 }
 
-// ============================================
-// Cinematic Theme Transition
-// ============================================
-let isTransitioning = false;
-// Forced cinematic blink state declarations (defined early so handlers can use them)
+// Forced cinematic blink state — owned by the Sauron engine below, declared
+// here so the top-level click handlers can read it.
 let forcedBlinkTarget = null; // null = normal, 0 = force open, 1 = force close
 let forcedBlinkFrom = 0;
 let forcedBlinkDuration = 0;
 let forcedBlinkStart = 0;
 let forcedBlinkCallback = null;
 
-// Expose clearForcedBlink globally so top-level handlers (theme toggle, clicks)
-// can cancel forced cinematic blink state. This intentionally operates on the
-// shared `forcedBlink*` variables declared above.
 function clearForcedBlink() {
     forcedBlinkTarget = null;
     forcedBlinkFrom = 0;
@@ -40,94 +31,30 @@ function clearForcedBlink() {
     forcedBlinkCallback = null;
 }
 
-let transitionTarget = null; // 'dark' | 'light' | null
-let transitionSafetyTimer = null;
-let transitionOverlayFadeTimer = null;
+// ============================================
+// Theme swap
+// ============================================
+// The one place the theme classes change. Runs inside `body.theme-swapping`,
+// which disables every CSS transition for exactly one style flush so the swap
+// lands as a single repaint instead of ~40 concurrent 500ms fades. The fog
+// toggle (attachFogToggle) calls this at the fog's opaque midpoint; the
+// no-Three.js fallback below calls it directly.
+function applyTheme(dark) {
+    body.classList.add('theme-swapping');
+    body.classList.toggle('dark', dark);
+    // `light-mode` styles the hero around the WebGL scene — only meaningful
+    // when that scene actually exists.
+    body.classList.toggle('light-mode', !dark && !!window._lightScene);
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    void body.offsetWidth; // flush styles with transitions disabled
+    body.classList.remove('theme-swapping');
+}
 
+// No-Three.js fallback: instant swap. attachFogToggle stops propagation when
+// the light scene exists, so this only runs when WebGL/Three.js is missing.
 themeToggle?.addEventListener('click', () => {
-    // The fog transition (attachFogToggle) owns theme switching whenever the
-    // light scene exists. This handler is only the no-Three.js fallback —
-    // running both flips the theme twice, visibly outside the fog cover.
     if (window._lightScene) return;
-
-    // overlay element removed; keep variable for compatibility if needed
-    const overlay = null;
-
-    const currentlyDark = body.classList.contains('dark');
-    const requestedGoingDark = !currentlyDark;
-
-    // If a transition is already running and user clicks, reverse it.
-    if (isTransitioning) {
-        const currentTargetIsDark = transitionTarget === 'dark';
-        // If the user clicked to request the same direction, ignore.
-        if (currentTargetIsDark === requestedGoingDark) return;
-
-        // Clear any safety timer and pending overlay fades from the in-progress transition
-        if (transitionSafetyTimer) { clearTimeout(transitionSafetyTimer); transitionSafetyTimer = null; }
-        if (transitionOverlayFadeTimer) { clearTimeout(transitionOverlayFadeTimer); transitionOverlayFadeTimer = null; }
-
-        // Clear any forced blink state to allow the new cinematic to run cleanly
-        clearForcedBlink();
-
-        // Fall through to start the opposite transition below
-    } else {
-        isTransitioning = true;
-    }
-
-    // Mark what we're targeting now
-    transitionTarget = requestedGoingDark ? 'dark' : 'light';
-
-    if (requestedGoingDark) {
-        // Going dark: apply class, then eye opens from closed
-        body.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
-
-        // Ensure any previous forced transitions are cleared, then force eye open
-        clearForcedBlink();
-        if (window._sauronForceEyeOpen) {
-            window._sauronForceEyeOpen(800);
-        }
-
-        // Complete transition after cinematic delay
-        transitionOverlayFadeTimer = setTimeout(() => {
-            isTransitioning = false;
-            transitionTarget = null;
-            transitionOverlayFadeTimer = null;
-        }, 1000);
-
-    } else {
-        // Going light: eye closes, flash, then remove dark
-        // Safety: always unlock after max 2 seconds no matter what
-        transitionSafetyTimer = setTimeout(() => {
-            body.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-            isTransitioning = false;
-            transitionTarget = null;
-            transitionSafetyTimer = null;
-        }, 2000);
-
-        const finishLight = () => {
-            // Flash light overlay (overlay removed) — no-op
-            // Remove dark mode
-            body.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-
-            // Fade out overlay
-            transitionOverlayFadeTimer = setTimeout(() => {
-                if (transitionSafetyTimer) { clearTimeout(transitionSafetyTimer); transitionSafetyTimer = null; }
-                isTransitioning = false;
-                transitionTarget = null;
-                transitionOverlayFadeTimer = null;
-            }, 500);
-        };
-
-        clearForcedBlink();
-        if (window._sauronForceEyeClose) {
-            window._sauronForceEyeClose(400, finishLight);
-        } else {
-            finishLight();
-        }
-    }
+    applyTheme(!body.classList.contains('dark'));
 });
 
 // ============================================
@@ -1362,21 +1289,29 @@ themeToggle?.addEventListener('click', () => {
     // ================================================================
     //  MAIN RENDER LOOP
     // ================================================================
+    let canvasCleared = false;
     function render(time) {
         const isDark = body.classList.contains('dark');
 
         // Always update blink state
         updateBlink();
 
-        ctx.clearRect(0, 0, W, H);
-
         if (!isDark) {
-            particles = [];
-            embers = [];
-            beamMotes = [];
+            // Light mode: clear once, then idle. The canvas is opacity 0 so
+            // clearing a full Retina viewport every frame was wasted work.
+            if (!canvasCleared) {
+                ctx.clearRect(0, 0, W, H);
+                canvasCleared = true;
+                particles = [];
+                embers = [];
+                beamMotes = [];
+            }
             requestAnimationFrame(render);
             return;
         }
+        canvasCleared = false;
+
+        ctx.clearRect(0, 0, W, H);
 
         // Smooth mouse tracking
         smoothMouse.x += (mouse.x - smoothMouse.x) * 0.1;
@@ -3875,7 +3810,11 @@ themeToggle?.addEventListener('click', () => {
     function renderLight() {
         requestAnimationFrame(renderLight);
 
-        if (document.body.classList.contains('dark') && !isTransitioningLight) {
+        // Only render while the scene is actually visible. The swap under the
+        // fog is instantaneous, so there is never a moment where both this and
+        // the Sauron loop need to draw — rendering here during the transition
+        // just doubled the per-frame GPU/CPU load for the whole fog sweep.
+        if (document.body.classList.contains('dark')) {
             return;
         }
 
@@ -4171,15 +4110,16 @@ themeToggle?.addEventListener('click', () => {
             camera.updateProjectionMatrix();
             camera.lookAt(defaultCameraTarget);
         },
+        resize: resizeLightScene,
     };
 })();
 
 // ============================================================================
 // LIGHT↔DARK TOGGLE — rolling fog wipe.
-// Three layered fog clouds on #fog-overlay drift in from different directions,
-// hold thickly opaque at midpoint (where the theme classes swap underneath),
-// then drift out the opposite way. Masks both the ~100vh hero layout shift
-// and the canvas swap.
+// Four layered fog clouds on #fog-overlay drift in from the left and right,
+// hold opaque through the midpoint (where applyTheme swaps everything in a
+// single repaint underneath), then drift out the opposite way. Masks both
+// the ~100vh hero layout shift and the canvas swap.
 // ============================================================================
 (function attachFogToggle() {
     const toggle = document.getElementById('theme-toggle');
@@ -4204,21 +4144,15 @@ themeToggle?.addEventListener('click', () => {
         ls.isTransitioning = true;
 
         const swap = () => {
-            const sc = document.getElementById('sauron-canvas');
+            applyTheme(!wasDark);
             if (wasDark) {
-                document.body.classList.remove('dark');
-                document.body.classList.add('light-mode');
-                localStorage.setItem('theme', 'light');
-                ls.canvas.style.display = 'block';
-                if (sc) sc.style.opacity = '0';
+                // Canvas is display:block now and the hero just grew to
+                // 100dvh — resize the renderer before its first visible frame
+                // or that frame is drawn at the stale (dark-mode) size.
+                ls.resize();
                 ls.snapToDefault();
                 ls.isLightMode = true;
             } else {
-                document.body.classList.remove('light-mode');
-                document.body.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-                ls.canvas.style.display = 'none';
-                if (sc) sc.style.opacity = '1';
                 if (window._sauronForceEyeOpen) window._sauronForceEyeOpen(0);
                 ls.isLightMode = false;
             }
@@ -4250,7 +4184,9 @@ themeToggle?.addEventListener('click', () => {
             ls.isTransitioning = false;
         };
         const onAnimEnd = (ev) => {
-            if (ev.target !== fog) return; // ignore bubbled .fog-layer events
+            // fog-swap-tick runs on the overlay; fog-bg on .fog-backdrop and
+            // bubbles up. Both are matched by name so .fog-layer drift
+            // animations ending are ignored.
             if (ev.animationName === 'fog-swap-tick' && !swapped) {
                 swapped = true;
                 swap();

@@ -25,10 +25,20 @@ body {
     min-height: 100vh;
     min-height: 100dvh;
     overscroll-behavior: none;
-    /* 350ms: theme fades start at the fog's 50% swap and MUST finish before
-       the fog thins (~85%), or the page is still color-shifting in view */
     transition: background-color 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
                 color 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* While the theme classes swap underneath the opaque fog, every color /
+   opacity transition on the page is suppressed. The fog already hides the
+   change, so the fades were pure cost (~40 per-frame style recalcs for 500ms)
+   and, worse, they outlived the fog cover and left the page visibly
+   color-shifting after it cleared. JS adds this for a single style flush. */
+body.theme-swapping,
+body.theme-swapping *,
+body.theme-swapping::before,
+body.theme-swapping::after {
+    transition: none !important;
 }
 
 /* Texture overlays — cross-fade because background-image can't transition */
@@ -80,9 +90,6 @@ body.dark::after {
     z-index: 150;
     pointer-events: none;
     opacity: 0;
-    /* Was 800ms — that fade outlived the fog cover by ~300ms, leaving a
-       translucent eye ghosting over the light theme after every toggle
-       (and visibly reversing mid-fade when toggling rapidly). */
     transition: opacity 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -121,31 +128,31 @@ body.light-mode .hero > .divider {
     z-index: 3;
 }
 
-/* Rolling fog overlay used by the light↔dark toggle transition. Four
-   layered grey fog masses sweep in from the left and right edges with
-   internal background-position churn (cloud puffs scrolling within each
-   layer) plus a subtle drift, all warped continuously by an SVG turbulence
-   filter so the edges read as wispy, organic, real fog instead of sliding
-   gradient blobs. */
+/* Rolling fog overlay used by the light↔dark toggle transition. A solid
+   backdrop fades up to hide the swap, while four layered grey fog masses
+   sweep in from the left and right edges and out the far side.
+
+   EVERYTHING here must stay on the compositor: only opacity and transform
+   animate, and the only filter is blur (GPU). No SVG url() filters — those
+   are rasterised in software and re-rasterised when a transform animation
+   starts and ends, which produced a visible hitch at both ends of every
+   toggle. Wispy edges come from the radial-gradient shapes plus a soft
+   mask instead of displacement. */
 #fog-overlay {
     position: fixed;
     inset: 0;
     z-index: 200; /* above precious-overlay (11), nav (103), footer (102) */
     pointer-events: none;
     overflow: hidden;
-    background-color: rgba(170, 174, 180, 0);
-    will-change: background-color;
 }
 
 /* fog-swap-tick is a zero-visual-cost timer animation: JS listens for its
    animationend to perform the theme swap. Because it runs on the SAME
    animation clock as fog-bg, the swap can never fire before the backdrop is
-   opaque — even if the browser stalls starting the animations (the old
-   setTimeout approach drifted against the animation clock and let the swap
-   show through thin fog). */
+   opaque — even if the browser stalls starting the animations (a setTimeout
+   drifts against the animation clock and lets the swap show through). */
 #fog-overlay.active {
-    animation: fog-bg 1000ms cubic-bezier(0.42, 0, 0.58, 1) forwards,
-               fog-swap-tick 500ms linear forwards;
+    animation: fog-swap-tick 500ms linear forwards;
 }
 
 @keyframes fog-swap-tick {
@@ -153,26 +160,52 @@ body.light-mode .hero > .divider {
     to   { outline-color: rgba(0, 0, 0, 0.01); }
 }
 
+/* Solid grey sheet whose OPACITY animates (compositor-only). Animating
+   background-color on the overlay itself repainted the full viewport every
+   frame on the main thread. */
+.fog-backdrop {
+    position: absolute;
+    inset: 0;
+    background-color: rgb(170, 174, 180);
+    opacity: 0;
+    will-change: opacity;
+}
+
+#fog-overlay.active .fog-backdrop {
+    animation: fog-bg 1000ms cubic-bezier(0.42, 0, 0.58, 1) forwards;
+}
+
 /* The backdrop MUST reach full opacity around the midpoint — the theme swap
    (page colors + both canvases flipping in one frame) happens at 50% and has
    to be completely hidden. Anything less than 1.0 shows a visible pop. */
 @keyframes fog-bg {
-    0%   { background-color: rgba(170, 174, 180, 0); }
-    30%  { background-color: rgba(170, 174, 180, 1); }
-    70%  { background-color: rgba(170, 174, 180, 1); }
-    100% { background-color: rgba(170, 174, 180, 0); }
+    0%   { opacity: 0; }
+    30%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 .fog-layer {
     position: absolute;
-    inset: -40%; /* extend well beyond viewport so wisps can drift in/out and the displacement filter has room */
+    /* Overshoot so wisps can drift in/out. The drift keyframes still carry
+       every layer fully off-screen (translate % is relative to the layer's
+       own size). */
+    inset: -28%;
     pointer-events: none;
     opacity: 0;
     will-change: transform, opacity;
     transform-origin: 50% 50%;
     background-repeat: no-repeat;
-    /* SVG turbulence filter morphs the gradient blobs into wispy fog edges */
-    filter: url(#fog-turbulence) blur(4px);
+    /* Soft, off-centre mask so each layer has no hard box edge and its
+       silhouette is irregular — the cheap stand-in for displacement. */
+    -webkit-mask-image:
+        radial-gradient(ellipse 70% 62% at 42% 48%, #000 35%, transparent 100%),
+        radial-gradient(ellipse 55% 70% at 66% 58%, #000 30%, transparent 100%);
+    -webkit-mask-composite: source-over;
+            mask-image:
+        radial-gradient(ellipse 70% 62% at 42% 48%, #000 35%, transparent 100%),
+        radial-gradient(ellipse 55% 70% at 66% 58%, #000 30%, transparent 100%);
+            mask-composite: add;
 }
 
 /* Back layers — blurrier, denser, slower-moving */
@@ -182,7 +215,7 @@ body.light-mode .hero > .divider {
         radial-gradient(ellipse 50% 55% at 70% 60%, rgba(185, 188, 195, 0.9),  transparent 60%),
         radial-gradient(ellipse 45% 50% at 50% 85%, rgba(160, 164, 172, 0.85), transparent 70%);
     background-size: 140% 130%;
-    filter: url(#fog-turbulence) blur(7px);
+    filter: blur(9px);
 }
 
 .fog-3 {
@@ -191,7 +224,7 @@ body.light-mode .hero > .divider {
         radial-gradient(ellipse 60% 55% at 35% 65%, rgba(175, 178, 186, 0.88), transparent 60%),
         radial-gradient(ellipse 45% 55% at 80% 80%, rgba(195, 198, 205, 0.85), transparent 65%);
     background-size: 145% 135%;
-    filter: url(#fog-turbulence) blur(7px);
+    filter: blur(9px);
 }
 
 /* Front layers — sharper, brighter wisps */
@@ -201,7 +234,7 @@ body.light-mode .hero > .divider {
         radial-gradient(ellipse 55% 55% at 70% 70%, rgba(195, 198, 204, 0.85), transparent 65%),
         radial-gradient(ellipse 40% 45% at 20% 75%, rgba(210, 213, 220, 0.78), transparent 65%);
     background-size: 130% 125%;
-    filter: url(#fog-turbulence) blur(2.5px);
+    filter: blur(4px);
 }
 
 .fog-4 {
@@ -210,7 +243,7 @@ body.light-mode .hero > .divider {
         radial-gradient(ellipse 55% 55% at 30% 75%, rgba(195, 198, 204, 0.88), transparent 65%),
         radial-gradient(ellipse 40% 45% at 80% 75%, rgba(212, 215, 222, 0.78), transparent 65%);
     background-size: 130% 125%;
-    filter: url(#fog-turbulence) blur(2.5px);
+    filter: blur(4px);
 }
 
 /* Each layer rolls THROUGH the viewport in one continuous direction:
@@ -266,18 +299,15 @@ body.light-mode .hero > .divider {
 
 @media (prefers-reduced-motion: reduce) {
     #fog-overlay.active,
+    #fog-overlay.active .fog-backdrop,
     #fog-overlay.active .fog-layer { animation: none; }
 }
 
-/* Skip painting the fog stack entirely when idle — the layers reference an
-   always-animating SVG turbulence filter, so leaving them composited at
-   opacity 0 still costs filter work every frame. */
-#fog-overlay:not(.active) { display: none; }
-
-/* Safari computes SVG filters (feTurbulence/feDisplacementMap) on the CPU,
-   which freezes the theme transition. Plain blur fog there instead — the
-   background-position churn keyframes still give it movement. */
-body.is-safari .fog-layer { filter: blur(6px); }
+/* Hide (not display:none) when idle. Toggling display re-creates the five
+   composited layers on every click, and that first raster landed exactly
+   when the animation was supposed to start. visibility:hidden keeps the
+   layers allocated and skips painting them. */
+#fog-overlay:not(.active) { visibility: hidden; }
 
 /* Light-mode page theming (additive — applies in addition to default styling) */
 body.light-mode {
@@ -402,10 +432,10 @@ body.light-mode .mist-fog {
     right: -12%;
     background-repeat: no-repeat;
     will-change: transform, opacity;
-    /* Per-layer below. Both band filters are STATIC, unlike #fog-turbulence,
-       whose animated baseFrequency would regenerate the noise every frame for
-       as long as the band is on screen. Without some displacement these layers
-       are visibly ellipses. */
+    /* Per-layer below. Both band filters are STATIC — an animated
+       baseFrequency would regenerate the noise every frame for as long as
+       the band is on screen. Without some displacement these layers are
+       visibly ellipses. */
     /* Fade to nothing on ALL FOUR sides, so the layer has no edge of its own.
        The horizontal half is not optional: a fog layer is a box inset only 12%
        past the stage, and it now travels far enough that its own left/right
